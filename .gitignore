@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# uv
+.uv/
+.python-version
+
+# build
+*egg-info/
+
+# matplotlib cache
+.cache/
+
+# datasets
+trainfilelist14/
