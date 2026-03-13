@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# VSCode
+.vscode/
+
 # uv
 .uv/
 .python-version
@@ -21,3 +24,8 @@ wheels/
 
 # datasets
 trainfilelist14/
+data/
+ncars/
+ncaltech101/
+Caltech101_raw/
+
