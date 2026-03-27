@@ -18,14 +18,14 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "scikit-learn>=1.4,<1.6",
     "setuptools<81",
-    "torch==2.4.*",
+    "torch==2.7.1",
     "torch-cluster>=1.6.3",
-    "torch-geometric==2.5.*",
+    "torch-geometric>=2.7,<2.8",
     "torch-scatter>=2.1.2",
     "torch-sparse>=0.6.18",
     "torch-spline-conv>=1.2.2",
     "torchmetrics==0.4.0",
-    "torchvision==0.19.*",
+    "torchvision==0.22.1",
     "tqdm>=4.66,<5",
     "wandb>=0.25.0",
 ]
@@ -37,8 +37,21 @@ members = [
 
 [tool.uv.sources]
 aegnn = { path = "./external/aegnn", editable = true }
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+pyg-lib = { index = "pyg-cu128" }
+torch-cluster = { index = "pyg-cu128" }
+torch-scatter = { index = "pyg-cu128" }
+torch-sparse = { index = "pyg-cu128" }
+torch-spline-conv = { index = "pyg-cu128" }
 
 [[tool.uv.index]]
-name = "pyg-cu121"
-url = "https://data.pyg.org/whl/torch-2.4.0+cu121.html"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-cu128"
+url = "https://data.pyg.org/whl/torch-2.7.1+cu128.html"
 format = "flat"
+explicit = true
