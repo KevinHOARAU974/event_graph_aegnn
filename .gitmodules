@@ -1,6 +1,6 @@
 [submodule "external/aegnn"]
 	path = external/aegnn
-	url = https://github.com/uzh-rpg/aegnn
+	url = https://github.com/KevinHOARAU974/aegnn.git
 [submodule "prophesee_automotive_dataset_toolbox"]
 	path = prophesee_automotive_dataset_toolbox
 	url = https://github.com/prophesee-ai/prophesee-automotive-dataset-toolbox
