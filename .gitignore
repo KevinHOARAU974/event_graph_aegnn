@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.venv-gpu
 
 # VSCode
 .vscode/
@@ -31,3 +32,10 @@ Caltech101_raw/
 
 # results
 external/aegnn_results/
+
+#wandb
+wandb/
+test_codes/wandb/
+
+#checkpoints
+.ipynb_checkpoints/
