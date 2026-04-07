@@ -3,4 +3,4 @@
 	url = https://github.com/KevinHOARAU974/aegnn.git
 [submodule "prophesee_automotive_dataset_toolbox"]
 	path = prophesee_automotive_dataset_toolbox
-	url = https://github.com/prophesee-ai/prophesee-automotive-dataset-toolbox
+	url = https://github.com/KevinHOARAU974/prophesee-automotive-dataset-toolbox.git
