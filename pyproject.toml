@@ -31,6 +31,8 @@ dependencies = [
     "torchvision==0.22.1",
     "tqdm>=4.66,<5",
     "wandb>=0.25.0",
+    "awscli>=1.44.75",
+    "boto3>=1.42.85",
 ]
 
 [tool.uv.workspace]
