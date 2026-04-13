@@ -2,5 +2,5 @@
 	path = external/aegnn
 	url = https://github.com/KevinHOARAU974/aegnn.git
 [submodule "prophesee_automotive_dataset_toolbox"]
-	path = prophesee_automotive_dataset_toolbox
+	path = external/prophesee_automotive_dataset_toolbox
 	url = https://github.com/KevinHOARAU974/prophesee-automotive-dataset-toolbox.git
