@@ -30,7 +30,7 @@ ncars/
 ncaltech101/
 Caltech101_raw/
 
-# results
+#results
 external/aegnn_results/
 
 #wandb
@@ -39,3 +39,6 @@ test_codes/wandb/
 
 #checkpoints
 .ipynb_checkpoints/
+
+#training_log
+training_log_aegnn

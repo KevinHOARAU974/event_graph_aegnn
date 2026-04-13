@@ -7,7 +7,7 @@ task: "recognition"
 data_params: 
   batch_size: 32
   num_workers: 8
-  pin_memory: False
+  pin_memory: True
   shuffle: True
 
 model_params:
