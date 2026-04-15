@@ -1,0 +1,30 @@
+seed: 12345
+
+model: "graph_res"
+dataset: "ncars"
+task: "recognition"
+
+data_params: 
+  batch_size: 32
+  num_workers: 8
+  pin_memory: True
+  shuffle: True
+
+model_params:
+  lr: 0.001
+  weight_decay: 0.00005
+  eta_min: 0.0
+  dim: 3
+
+trainer:
+  max_epochs: 1
+  overfit_batches: 0
+  log_every_n_steps: 1
+  gradient_clip_val: 0
+
+log_gradients: True
+profile: True
+debug: True
+
+log_dir: "optuna_log_aegnn/"
+data_dir: "/home/kevin-imagine/Documents/event_graph/data"

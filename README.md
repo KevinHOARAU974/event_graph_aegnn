@@ -11,3 +11,9 @@ python3 dataset_visualization.py ../trainfilelist14/train/moorea_2019-02-19_004_
 ```
 python external/aegnn/scripts/train.py --config config/config.yaml
 ```
+
+## Launch Optuna
+
+```
+ python external/aegnn/scripts/tune.py --config config/config_tune.yaml
+```
