@@ -29,6 +29,7 @@ data/
 ncars/
 ncaltech101/
 Caltech101_raw/
+val_b/
 
 #results
 external/aegnn_results/
@@ -41,4 +42,8 @@ test_codes/wandb/
 .ipynb_checkpoints/
 
 #training_log
-training_log_aegnn
+training_log_aegnn/
+optuna_log_aegnn/
+
+#config cluster
+config/*-cluster.yaml

@@ -1,4 +1,5 @@
 seed: 12345
+project_name: 'aegnn'
 
 model: "graph_res"
 dataset: "ncars"
@@ -21,6 +22,10 @@ trainer:
   overfit_batches: 0
   log_every_n_steps: 1
   gradient_clip_val: 0
+
+callback_params:
+  patience: 5
+  
 
 log_gradients: True
 profile: True
