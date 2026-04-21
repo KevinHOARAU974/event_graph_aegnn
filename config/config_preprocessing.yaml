@@ -1,0 +1,12 @@
+seed: 12345
+debug: False
+
+dataset: 'ncaltech101'
+
+data_params: 
+  batch_size: 8
+  num_workers: 8
+  pin_memory: True
+  shuffle: True
+
+data_dir: "/home/kevin-imagine/Documents/event_graph/data"

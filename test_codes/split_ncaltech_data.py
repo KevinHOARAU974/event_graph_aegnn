@@ -6,7 +6,7 @@ import time
 np.random.seed(42)
 
 raw_image_files_folder = Path('Caltech101_raw/Caltech101/')
-raw_annotation_files_folder = Path('Caltech101_raw/Caltech101_annotations/')
+# raw_annotation_files_folder = Path('Caltech101_raw/Caltech101_annotations/')
 
 dst_dataset_folder = Path('ncaltech101')
 
@@ -40,21 +40,21 @@ for classe in classes:
 
     for k in datas_train:
         shutil.copy(k, training_path / k.name)
-        annot = Path(str(k).replace('image','annotation'))
-        annot_file = raw_annotation_files_folder / classe / annot.name
-        shutil.copy(annot_file, training_path / annot_file.name)
+        # annot = Path(str(k).replace('image','annotation'))
+        # annot_file = raw_annotation_files_folder / classe / annot.name
+        # shutil.copy(annot_file, training_path / annot_file.name)
 
     for k in datas_val:
         shutil.copy(k, val_path / k.name)
-        annot = Path(str(k).replace('image','annotation'))
-        annot_file = raw_annotation_files_folder / classe / annot.name
-        shutil.copy(annot_file, val_path / annot_file.name)
+        # annot = Path(str(k).replace('image','annotation'))
+        # annot_file = raw_annotation_files_folder / classe / annot.name
+        # shutil.copy(annot_file, val_path / annot_file.name)
     
     for k in datas_test:
         shutil.copy(k, test_path / k.name)
-        annot = Path(str(k).replace('image','annotation'))
-        annot_file = raw_annotation_files_folder / classe / annot.name
-        shutil.copy(annot_file, test_path / annot_file.name)
+        # annot = Path(str(k).replace('image','annotation'))
+        # annot_file = raw_annotation_files_folder / classe / annot.name
+        # shutil.copy(annot_file, test_path / annot_file.name)
 
     print(f"Classe {classe}: finish")
 
