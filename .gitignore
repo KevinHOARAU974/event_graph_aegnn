@@ -47,3 +47,6 @@ optuna_log_aegnn/
 
 #config cluster
 config/*-cluster.yaml
+
+#test code
+test_codes/
