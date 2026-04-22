@@ -2,11 +2,11 @@ seed: 12345
 project_name: 'aegnn'
 
 model: "graph_res"
-dataset: "ncars"
+dataset: "ncaltech101"
 task: "recognition"
 
 data_params: 
-  batch_size: 32
+  batch_size: 4
   num_workers: 8
   pin_memory: True
   shuffle: True

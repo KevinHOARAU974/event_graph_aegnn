@@ -4,3 +4,6 @@
 [submodule "prophesee_automotive_dataset_toolbox"]
 	path = external/prophesee_automotive_dataset_toolbox
 	url = https://github.com/KevinHOARAU974/prophesee-automotive-dataset-toolbox.git
+[submodule "external/goat"]
+	path = external/goat
+	url = https://github.com/devnkong/GOAT.git
