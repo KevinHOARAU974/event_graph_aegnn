@@ -7,3 +7,6 @@
 [submodule "external/goat"]
 	path = external/goat
 	url = https://github.com/devnkong/GOAT.git
+[submodule "external/GRIT"]
+	path = external/GRIT
+	url = https://github.com/LiamMa/GRIT.git
