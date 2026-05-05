@@ -570,6 +570,7 @@ dependencies = [
     { name = "semantic-version" },
     { name = "sentry-sdk" },
     { name = "setuptools" },
+    { name = "sgformer" },
     { name = "simplejson" },
     { name = "torch" },
     { name = "torch-cluster" },
@@ -632,6 +633,7 @@ requires-dist = [
     { name = "semantic-version", specifier = ">=2.10.0" },
     { name = "sentry-sdk", specifier = ">=2.54.0" },
     { name = "setuptools", specifier = "<81" },
+    { name = "sgformer", editable = "external/SGFormer" },
     { name = "simplejson", specifier = ">=4.0.1" },
     { name = "torch", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch-cluster", specifier = ">=1.6.3", index = "https://data.pyg.org/whl/torch-2.7.1+cu128.html" },
@@ -2435,6 +2437,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/76/95/faf61eb8363f26aa7
 wheels = [
     { url = "https://files.pythonhosted.org/packages/94/b8/f1f62a5e3c0ad2ff1d189590bfa4c46b4f3b6e49cef6f26c6ee4e575394d/setuptools-80.10.2-py3-none-any.whl", hash = "sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173", size = 1064234, upload-time = "2026-01-25T22:38:15.216Z" },
 ]
+
+[[package]]
+name = "sgformer"
+version = "0.0.0"
+source = { editable = "external/SGFormer" }
 
 [[package]]
 name = "simplejson"

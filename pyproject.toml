@@ -62,6 +62,7 @@ dependencies = [
     "grit>=0.0.0",
     "yacs>=0.1.8",
     "opt-einsum>=3.4.0",
+    "sgformer>=0.0.0",
 ]
 
 [tool.uv.workspace]
@@ -73,6 +74,7 @@ members = [
 goat = { path = "./external/goat", editable = true }
 aegnn = { path = "./external/aegnn", editable = true }
 grit = { path = "./external/GRIT", editable = true }
+sgformer = { path = "./external/SGFormer", editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 pyg-lib = { index = "pyg-cu128" }

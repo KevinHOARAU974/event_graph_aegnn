@@ -10,3 +10,6 @@
 [submodule "external/GRIT"]
 	path = external/GRIT
 	url = https://github.com/LiamMa/GRIT.git
+[submodule "external/SGFormer"]
+	path = external/SGFormer
+	url = https://github.com/qitianwu/SGFormer.git
