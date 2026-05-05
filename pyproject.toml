@@ -59,6 +59,9 @@ dependencies = [
     "wrapt>=2.1.2",
     "wurlitzer>=3.1.1",
     "goat>=0.0.0",
+    "grit>=0.0.0",
+    "yacs>=0.1.8",
+    "opt-einsum>=3.4.0",
 ]
 
 [tool.uv.workspace]
@@ -69,6 +72,7 @@ members = [
 [tool.uv.sources]
 goat = { path = "./external/goat", editable = true }
 aegnn = { path = "./external/aegnn", editable = true }
+grit = { path = "./external/GRIT", editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 pyg-lib = { index = "pyg-cu128" }

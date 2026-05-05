@@ -538,6 +538,7 @@ dependencies = [
     { name = "einops" },
     { name = "goat" },
     { name = "googledrivedownloader" },
+    { name = "grit" },
     { name = "ipython" },
     { name = "ipywidgets" },
     { name = "jinja2" },
@@ -552,6 +553,7 @@ dependencies = [
     { name = "numpy" },
     { name = "ogb" },
     { name = "opencv-python" },
+    { name = "opt-einsum" },
     { name = "optuna" },
     { name = "optuna-integration", extra = ["pytorch-lightning"] },
     { name = "outdated" },
@@ -584,6 +586,7 @@ dependencies = [
     { name = "websocket-client" },
     { name = "wrapt" },
     { name = "wurlitzer" },
+    { name = "yacs" },
 ]
 
 [package.metadata]
@@ -597,6 +600,7 @@ requires-dist = [
     { name = "einops", specifier = ">=0.8.2" },
     { name = "goat", editable = "external/goat" },
     { name = "googledrivedownloader", specifier = ">=1.1.0" },
+    { name = "grit", editable = "external/GRIT" },
     { name = "ipython", specifier = ">=8.38,<9" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "jinja2", specifier = ">=3.1.6" },
@@ -611,6 +615,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<2.0" },
     { name = "ogb", specifier = ">=1.3.6" },
     { name = "opencv-python", specifier = ">=4.9,<5" },
+    { name = "opt-einsum", specifier = ">=3.4.0" },
     { name = "optuna", specifier = ">=4.8.0" },
     { name = "optuna-integration", extras = ["pytorch-lightning"], specifier = ">=4.8.0" },
     { name = "outdated", specifier = ">=0.2.2" },
@@ -642,6 +647,7 @@ requires-dist = [
     { name = "websocket-client", specifier = ">=1.9.0" },
     { name = "wrapt", specifier = ">=2.1.2" },
     { name = "wurlitzer", specifier = ">=3.1.1" },
+    { name = "yacs", specifier = ">=0.1.8" },
 ]
 
 [[package]]
@@ -819,6 +825,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/6c/bbfb798b05fec736a0d24dc23e81b45bcee87f45a83cfb39db031853bddc/greenlet-3.4.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:5434271357be07f3ad0936c312645853b7e689e679e29310e2de09a9ea6c3adf", size = 1637223, upload-time = "2026-04-08T15:57:27.556Z" },
     { url = "https://files.pythonhosted.org/packages/b7/7d/981fe0e7c07bd9d5e7eb18decb8590a11e3955878291f7a7de2e9c668eb7/greenlet-3.4.0-cp310-cp310-win_amd64.whl", hash = "sha256:a19093fbad824ed7c0f355b5ff4214bffda5f1a7f35f29b31fcaa240cc0135ab", size = 237902, upload-time = "2026-04-08T17:03:14.16Z" },
 ]
+
+[[package]]
+name = "grit"
+version = "0.0.0"
+source = { editable = "external/GRIT" }
 
 [[package]]
 name = "h11"
@@ -1749,6 +1760,15 @@ wheels = [
 ]
 
 [[package]]
+name = "opt-einsum"
+version = "3.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/b9/2ac072041e899a52f20cf9510850ff58295003aa75525e58343591b0cbfb/opt_einsum-3.4.0.tar.gz", hash = "sha256:96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac", size = 63004, upload-time = "2024-09-26T14:33:24.483Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd", size = 71932, upload-time = "2024-09-26T14:33:23.039Z" },
+]
+
+[[package]]
 name = "optuna"
 version = "4.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2581,9 +2601,9 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:aca3472608e3c92df5166537595687b53a6c997082478b372427b043dbed98d0" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:d6c3cba198dc93f93422a8545f48a6697890366e4b9701f54351fc27e2304bd3" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-win_amd64.whl", hash = "sha256:5174f02de8ca14df87c8e333c4c39cf3ce93a323c9d470d690301d110a053b3c" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:aca3472608e3c92df5166537595687b53a6c997082478b372427b043dbed98d0", upload-time = "2025-06-03T18:30:30Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:d6c3cba198dc93f93422a8545f48a6697890366e4b9701f54351fc27e2304bd3", upload-time = "2025-06-03T18:30:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp310-cp310-win_amd64.whl", hash = "sha256:5174f02de8ca14df87c8e333c4c39cf3ce93a323c9d470d690301d110a053b3c", upload-time = "2025-06-03T18:30:50Z" },
 ]
 
 [[package]]
@@ -2676,7 +2696,7 @@ dependencies = [
     { name = "torch", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:3a41b87628c0d6095839c43a1dd706670e7e5a56edc5860e700e1ba22c3ef8af" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:3a41b87628c0d6095839c43a1dd706670e7e5a56edc5860e700e1ba22c3ef8af", upload-time = "2025-06-03T18:37:29Z" },
 ]
 
 [[package]]
@@ -2694,8 +2714,8 @@ dependencies = [
     { name = "torch", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:538f4db667286d939b4eee0a66d31ed21b51186668006b0e0ffe20338ecc7e00" },
-    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1%2Bcu128-cp310-cp310-win_amd64.whl", hash = "sha256:ad48ba3c3ffd48027e3a8de42fcea131a53a524ee9416ca4efb22f9ac6b7328d" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:538f4db667286d939b4eee0a66d31ed21b51186668006b0e0ffe20338ecc7e00", upload-time = "2025-06-03T18:37:28Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torchvision-0.22.1%2Bcu128-cp310-cp310-win_amd64.whl", hash = "sha256:ad48ba3c3ffd48027e3a8de42fcea131a53a524ee9416ca4efb22f9ac6b7328d", upload-time = "2025-06-03T18:37:28Z" },
 ]
 
 [[package]]
@@ -2919,6 +2939,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/15/8751330b5186cedc4ed4b597989882ea05e0408b53fa47bcb46a6125bfc6/xxhash-3.6.0-cp310-cp310-win32.whl", hash = "sha256:aed058764db109dc9052720da65fafe84873b05eb8b07e5e653597951af57c3b", size = 30577, upload-time = "2025-10-02T14:34:10.234Z" },
     { url = "https://files.pythonhosted.org/packages/bb/cc/53f87e8b5871a6eb2ff7e89c48c66093bda2be52315a8161ddc54ea550c4/xxhash-3.6.0-cp310-cp310-win_amd64.whl", hash = "sha256:e82da5670f2d0d98950317f82a0e4a0197150ff19a6df2ba40399c2a3b9ae5fb", size = 31487, upload-time = "2025-10-02T14:34:11.618Z" },
     { url = "https://files.pythonhosted.org/packages/9f/00/60f9ea3bb697667a14314d7269956f58bf56bb73864f8f8d52a3c2535e9a/xxhash-3.6.0-cp310-cp310-win_arm64.whl", hash = "sha256:4a082ffff8c6ac07707fb6b671caf7c6e020c75226c561830b73d862060f281d", size = 27863, upload-time = "2025-10-02T14:34:12.619Z" },
+]
+
+[[package]]
+name = "yacs"
+version = "0.1.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/3e/4a45cb0738da6565f134c01d82ba291c746551b5bc82e781ec876eb20909/yacs-0.1.8.tar.gz", hash = "sha256:efc4c732942b3103bea904ee89af98bcd27d01f0ac12d8d4d369f1e7a2914384", size = 11100, upload-time = "2020-08-10T16:37:47.755Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/4f/fe9a4d472aa867878ce3bb7efb16654c5d63672b86dc0e6e953a67018433/yacs-0.1.8-py3-none-any.whl", hash = "sha256:99f893e30497a4b66842821bac316386f7bd5c4f47ad35c9073ef089aa33af32", size = 14747, upload-time = "2020-08-10T16:37:46.4Z" },
 ]
 
 [[package]]
