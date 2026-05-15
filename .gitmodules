@@ -9,7 +9,7 @@
 	url = https://github.com/KevinHOARAU974/GOAT.git
 [submodule "external/GRIT"]
 	path = external/GRIT
-	url = https://github.com/LiamMa/GRIT.git
+	url = https://github.com/KevinHOARAU974/GRIT.git
 [submodule "external/SGFormer"]
 	path = external/SGFormer
 	url = https://github.com/KevinHOARAU974/SGFormer.git
