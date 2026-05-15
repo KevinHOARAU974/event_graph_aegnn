@@ -9,6 +9,11 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "adapted-sgformer"
+version = "0.0.0"
+source = { editable = "adapted_sgformer" }
+
+[[package]]
 name = "aegnn"
 version = "0.0.0"
 source = { editable = "external/aegnn" }
@@ -529,6 +534,7 @@ name = "event-graph"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "adapted-sgformer" },
     { name = "aegnn" },
     { name = "attrs" },
     { name = "awscli" },
@@ -592,6 +598,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "adapted-sgformer", editable = "adapted_sgformer" },
     { name = "aegnn", editable = "external/aegnn" },
     { name = "attrs", specifier = ">=25.4.0" },
     { name = "awscli", specifier = ">=1.44.75" },

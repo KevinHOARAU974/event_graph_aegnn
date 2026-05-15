@@ -17,3 +17,9 @@ python external/aegnn/scripts/train.py --config config/config.yaml
 ```
  python external/aegnn/scripts/tune.py --config config/config_tune.yaml
 ```
+
+# Launch Training Adapted SGFormer
+
+```
+python ../adapted_sgformer/scripts/train.py --config ../config/config_adapted_sgformer.yaml 
+```

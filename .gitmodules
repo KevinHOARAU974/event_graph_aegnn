@@ -6,10 +6,10 @@
 	url = https://github.com/KevinHOARAU974/prophesee-automotive-dataset-toolbox.git
 [submodule "external/goat"]
 	path = external/goat
-	url = https://github.com/devnkong/GOAT.git
+	url = https://github.com/KevinHOARAU974/GOAT.git
 [submodule "external/GRIT"]
 	path = external/GRIT
 	url = https://github.com/LiamMa/GRIT.git
 [submodule "external/SGFormer"]
 	path = external/SGFormer
-	url = https://github.com/qitianwu/SGFormer.git
+	url = https://github.com/KevinHOARAU974/SGFormer.git

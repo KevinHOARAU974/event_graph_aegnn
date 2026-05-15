@@ -1,0 +1,50 @@
+seed: 12345
+project_name : 'adapted_sgformer'
+
+task: "recognition"
+
+model_params:
+    in_channels: 1
+    hidden_channels: 32
+    out_channels: 2
+    trans_num_layers: 1
+    trans_num_heads: 1
+    trans_dropout: 0.5
+    trans_use_bn: True
+    trans_use_residual: True
+    trans_use_weight: True
+    trans_use_act: True
+    gnn_num_layers: 1
+    gnn_dropout: 0.5
+    gnn_use_weight: True
+    gnn_use_init: False
+    gnn_use_bn: True
+    gnn_use_residual: True
+    gnn_use_act: True
+    use_graph: True
+    graph_weight: 0.8
+    aggregate: 'add'
+    pooling: 'mean'
+
+dataset:
+  root: "../data/"
+  name: "ncars"
+
+dataloader:  
+  batch_size : 50
+  num_workers: 8
+  pin_memory: True
+
+criterion:
+  label_smoothing : 0.1
+
+max_epochs : 1
+
+optimizer:
+  lr : 1e-4
+  weight_decay : 5e-5
+
+scheduler:
+  eta_min: 0.0
+
+log_dir: "./test_asgf"
