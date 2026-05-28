@@ -4,11 +4,11 @@ project_name : 'adapted_sgformer'
 task: "recognition"
 
 model_params:
-    in_channels: 1
-    hidden_channels: 32
+    in_channels: 48
+    hidden_channels: 96
     out_channels: 2
-    trans_num_layers: 1
-    trans_num_heads: 1
+    trans_num_layers: 2
+    trans_num_heads: 4
     trans_dropout: 0.5
     trans_use_bn: True
     trans_use_residual: True
@@ -22,6 +22,8 @@ model_params:
     gnn_use_residual: True
     gnn_use_act: True
     use_graph: True
+    linear_dim: 128
+    linear_dropout: 0.1
     graph_weight: 0.8
     aggregate: 'add'
     pooling: 'mean'
@@ -31,7 +33,7 @@ dataset:
   name: "ncars"
 
 dataloader:  
-  batch_size : 50
+  batch_size : 16
   num_workers: 8
   pin_memory: True
 

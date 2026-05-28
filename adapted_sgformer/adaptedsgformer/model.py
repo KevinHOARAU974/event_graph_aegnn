@@ -1,18 +1,38 @@
 import torch
 import torch.nn as nn
-import pandas as pd
+import torch.nn.functional as F
 
-from pathlib import Path
+import numpy as np
 
-from torch_geometric.data import Dataset, Batch
-from torch_geometric.loader import DataLoader
+from torch_geometric.data import Batch
 from torch_geometric.utils import to_dense_batch
 from torch_geometric.nn import global_mean_pool, global_add_pool, global_max_pool
 
 from torch import Tensor
-import torch.nn.functional as F
+
 
 from sgformer.large.ours import GraphConv
+
+
+def embed_1D_scalar(t, dim, max_period):
+    """
+    Create sinusoidal timestep embeddings.
+    :param t: a 1-D Tensor of N indices, one per batch element.
+                        These may be fractional.
+    :param dim: the dimension of the output.
+    :param max_period: controls the minimum frequency of the embeddings.
+    :return: an (N, D) Tensor of positional embeddings.
+    """
+    # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
+    half = dim // 2
+    freqs = torch.exp(
+        -np.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
+    ).to(device=t.device)
+    args = t[:, None].float() * freqs[None]
+    embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+    if dim % 2:
+        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+    return embedding
 
 # Adapted self Attention layer of SGFormer
 class TransConvLayer(nn.Module):
@@ -182,12 +202,35 @@ class TransConv(nn.Module):
 
 
 class AdaptedSGFormer(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels,
-                 trans_num_layers=1, trans_num_heads=1, trans_dropout=0.5, trans_use_bn=True, trans_use_residual=True, trans_use_weight=True, trans_use_act=True,
-                 gnn_num_layers=1, gnn_dropout=0.5, gnn_use_weight=True, gnn_use_init=False, gnn_use_bn=True, gnn_use_residual=True, gnn_use_act=True,
-                 use_graph=True, graph_weight=0.8, aggregate='add', pooling = 'mean'):
+    def __init__(self, in_channels,
+                 hidden_channels,
+                 out_channels,
+                 trans_num_layers=1,
+                 trans_num_heads=1,
+                 trans_dropout=0.5,
+                 trans_use_bn=True,
+                 trans_use_residual=True,
+                 trans_use_weight=True,
+                 trans_use_act=True,
+                 gnn_num_layers=1,
+                 gnn_dropout=0.5,
+                 gnn_use_weight=True,
+                 gnn_use_init=False,
+                 gnn_use_bn=True,
+                 gnn_use_residual=True,
+                 gnn_use_act=True,
+                 linear_dim=128,
+                 linear_dropout=0.1,
+                 use_graph=True,
+                 graph_weight=0.8,
+                 aggregate='add',
+                 pooling = 'mean'):
         
         super().__init__()
+
+        self.in_channels = in_channels
+        self.hidden_channels = hidden_channels
+        self.out_channels = out_channels
 
         #Global self attention path
         self.trans_conv = TransConv(in_channels, hidden_channels, trans_num_layers, trans_num_heads, trans_dropout, trans_use_bn, trans_use_residual, trans_use_weight, trans_use_act)
@@ -201,6 +244,10 @@ class AdaptedSGFormer(nn.Module):
 
         self.aggregate = aggregate #aggregation function
         self.pooling = pooling #pooling function
+
+        self.h_map = None
+
+        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
         
         #Pooling layer
         if pooling == 'mean':
@@ -213,10 +260,22 @@ class AdaptedSGFormer(nn.Module):
             raise ValueError(f'Invalid pooling type:{pooling}')
         
         #Classifier head
+
+
         if aggregate == 'add':
-            self.fc = nn.Linear(hidden_channels, out_channels)
+            self.fc = self.fc = nn.Sequential(
+                nn.Linear(hidden_channels, linear_dim),
+                nn.ReLU(),
+                nn.Dropout(linear_dropout),
+                nn.Linear(linear_dim, out_channels),
+                )
         elif aggregate == 'cat':
-            self.fc = nn.Linear(2 * hidden_channels, out_channels)
+            self.fc = nn.Sequential(
+                nn.Linear(2 * hidden_channels, linear_dim),
+                nn.ReLU(),
+                nn.Dropout(linear_dropout),
+                nn.Linear(linear_dim, out_channels),
+                )
         else:
             raise ValueError(f'Invalid aggregate type:{aggregate}')
 
@@ -225,6 +284,19 @@ class AdaptedSGFormer(nn.Module):
         self.params2.extend(list(self.fc.parameters()))
 
     def forward(self, batch : Batch):
+
+        #Embedding
+        factors = [1, 1, 1e8]
+        embed_pos = torch.stack([
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=100) for (dim_in, fact) in zip(range(3), factors)
+        ], dim=1)
+
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+        x_emb = self.x_embedding(batch.x.long()).squeeze()
+
+        batch.x = x_emb + embed_pos
+
         x1 = self.trans_conv(batch)
         if self.use_graph:
             x2 = self.graph_conv(batch.x, batch.edge_index)
@@ -235,6 +307,7 @@ class AdaptedSGFormer(nn.Module):
         else:
             x = x1
         x = self.pooling_layer(x, batch.batch) 
+        self.h_map = x
         x = self.fc(x)
         return x
     

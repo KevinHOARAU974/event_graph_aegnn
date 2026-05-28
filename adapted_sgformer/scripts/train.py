@@ -98,7 +98,7 @@ def main() -> None:
     torch.manual_seed(cfg['seed'])
 
     ### Datasets and Dataloader
-    root = Path(cfg['dataset']['root']) 
+    root = Path(os.path.expanduser(cfg['dataset']['root'])) 
 
     train_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'training')
     val_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'validation')
@@ -188,9 +188,9 @@ def main() -> None:
 
         if val_acc > best_val:
             best_val = val_acc
-            torch.save(model, "best.pth")
+            torch.save(model, f"{checkpoint_path}/best.pth")
         
-        torch.save(model,'last.pth')
+        torch.save(model,f'{checkpoint_path}last.pth')
 
         print(f'Epoch {epoch}:')
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
