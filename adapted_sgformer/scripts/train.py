@@ -119,6 +119,7 @@ def main() -> None:
 
     cfg['optimizer']['lr'] = float(cfg['optimizer']['lr'])
     cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay'])
+    cfg['scheduler']['eta_min'] = float(cfg['scheduler']['eta_min'])
 
     optimizer = torch.optim.Adam([
             {'params': model.params1},
