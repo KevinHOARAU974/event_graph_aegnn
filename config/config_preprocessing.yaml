@@ -1,7 +1,7 @@
 seed: 12345
 debug: False
 
-dataset: 'ncaltech101'
+dataset: 'ncars'
 
 data_params: 
   batch_size: 8
