@@ -16,6 +16,7 @@ model_params:
   weight_decay: 0.00005
   eta_min: 0.0
   dim: 3
+  label_smoothing: 0.1
 
 trainer:
   max_epochs: 1

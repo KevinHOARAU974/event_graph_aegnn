@@ -50,3 +50,7 @@ config/*-cluster.yaml
 
 #test code
 test_codes/
+
+#Checkpoints
+
+checkpoints/
