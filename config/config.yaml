@@ -2,11 +2,11 @@ seed: 12345
 project_name: 'aegnn'
 
 model: "graph_res"
-dataset: "ncaltech101"
+dataset: "ncars"
 task: "recognition"
 
 data_params: 
-  batch_size: 4
+  batch_size: 16
   num_workers: 8
   pin_memory: True
   shuffle: True
@@ -16,10 +16,12 @@ model_params:
   weight_decay: 0.00005
   eta_min: 0.0
   dim: 3
-  label_smoothing: 0.1
+  scheduler_type: "step"
+
+
 
 trainer:
-  max_epochs: 1
+  max_epochs: 3
   overfit_batches: 0
   log_every_n_steps: 1
   gradient_clip_val: 0
