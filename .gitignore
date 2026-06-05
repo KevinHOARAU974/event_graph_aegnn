@@ -51,6 +51,16 @@ config/*-cluster.yaml
 #test code
 test_codes/
 
+#Submodule
+
+external/GRIT
+external/SGFormer
+external/goat
+
+# Personal work
+
+adapted_sgformer/
+
 #Checkpoints
 
 # checkpoints/
