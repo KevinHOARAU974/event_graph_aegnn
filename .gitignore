@@ -45,6 +45,8 @@ test_codes/wandb/
 #training_log
 training_log_aegnn/
 optuna_log_aegnn/
+lightning_logs/
+results.csv
 
 #config cluster
 config/*-cluster.yaml
