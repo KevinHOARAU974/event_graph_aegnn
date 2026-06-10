@@ -6,6 +6,7 @@ import argparse
 import yaml
 import datetime
 import numpy as np
+import matplotlib.pyplot as plt
 
 from aegnn.utils.git import get_git_info
 
@@ -17,6 +18,7 @@ from torch_geometric.loader import DataLoader
 from adaptedsgformer.model import AdaptedSGFormer
 from adaptedsgformer.dataset import GraphDataset
 from torchmetrics.functional import accuracy
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 
 def load_config(config_path: str) -> dict:
@@ -79,6 +81,58 @@ def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'
 
     return np.mean(np.array(loss_ls)), np.mean(np.array(acc_ls))
 
+def test_model(model, test_loader, criterion, checkpoint_path, num_classes = 2, device='cuda'):
+
+    model.to(device)
+    model.eval()
+
+    loss_ls = []
+    acc_ls = []
+
+    y_targets = []
+    y_preds = []
+
+    with torch.no_grad():
+        for batch in tqdm(test_loader):
+
+            batch = batch.to(device)
+
+            out = model(batch)
+            loss = criterion(out, batch.y)
+
+            loss_ls.append(loss.item())
+
+            y_prediction = torch.argmax(out, dim=-1)
+            acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
+
+            y_targets.append(batch.y)
+            y_preds.append(y_prediction)
+    
+    preds = torch.cat(y_preds)
+    targets = torch.cat(y_targets)
+
+    cm = confusion_matrix(targets.cpu().numpy(), 
+                          preds.cpu().numpy())
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm,
+        # display_labels=data_module.classes
+    )
+
+    disp.plot(
+        ax=ax,
+        xticks_rotation=90,
+        colorbar=True
+    )
+
+    plt.tight_layout()
+    plt.savefig(f"{checkpoint_path}/confusion_matrix.png", dpi=300)
+    plt.close()
+
+    return np.mean(np.array(loss_ls)), np.mean(np.array(acc_ls))
+
 
 def main() -> None:
 
@@ -102,9 +156,11 @@ def main() -> None:
 
     train_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'training')
     val_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'validation')
+    test_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'test')
 
     train_dataloader = DataLoader(train_dataset, shuffle=True, **cfg['dataloader'])
-    val_dataloader = DataLoader(val_dataset, shuffle=True, **cfg['dataloader'])
+    val_dataloader = DataLoader(val_dataset, shuffle=False, **cfg['dataloader'])
+    test_dataloader = DataLoader(test_dataset, shuffle=False, **cfg['dataloader'])
 
     print("Dataloaders : Check")
     ### Model
@@ -115,7 +171,8 @@ def main() -> None:
 
     ### Criterion, optimizer, scheduler
 
-    criterion = nn.CrossEntropyLoss(**cfg['criterion'])
+    criterion_train = nn.CrossEntropyLoss(**cfg['criterion'])
+    criterion_test = nn.CrossEntropyLoss()
 
     cfg['optimizer']['lr'] = float(cfg['optimizer']['lr'])
     cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay'])
@@ -163,7 +220,7 @@ def main() -> None:
         train_loss, train_acc = train_one_epoch(
             model,
             train_dataloader,
-            criterion,
+            criterion_train,
             optimizer,
             scheduler,
             num_classes=cfg['model_params']['out_channels'],
@@ -173,7 +230,7 @@ def main() -> None:
         val_loss, val_acc = valid_one_epoch(
             model,
             val_dataloader,
-            criterion,
+            criterion_test,
             num_classes=cfg['model_params']['out_channels'],
             device=device
         )
@@ -189,16 +246,50 @@ def main() -> None:
 
         if val_acc > best_val:
             best_val = val_acc
-            torch.save(model, f"{checkpoint_path}/best.pth")
+            torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "scheduler_state_dict": scheduler.state_dict(),
+                        "epoch": epoch,
+                        "best_val_acc": best_val,
+                        "cfg": cfg,
+                        }, f"{checkpoint_path}/best.pth")
         
-        torch.save(model,f'{checkpoint_path}last.pth')
+        torch.save({
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "epoch": epoch,
+                    "last_val_acc": val_acc,
+                    "cfg": cfg,
+                    }, f"{checkpoint_path}/last.pth")
 
         print(f'Epoch {epoch}:')
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
         print(f'Val_loss : {val_loss}, Val_acc : {val_acc}')
 
-    wandb.finish()
+    #Test
 
+    #Load best model
+
+    best_checkpoint = torch.load(f"{checkpoint_path}/best.pth", weights_only=False)
+
+    best_model = AdaptedSGFormer(**cfg['model_params'])
+
+    best_model.load_state_dict(best_checkpoint["model_state_dict"])
+
+    # Test the best model
+
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, checkpoint_path, num_classes=cfg['model_params']['out_channels'], device=device)
+
+
+    wandb.log({
+            # 'epoch' : epoch,
+            'test/loss' : test_loss,
+            'test/acc' : test_acc,
+        })
+
+    wandb.finish()
 
 if __name__ == "__main__":
     main()

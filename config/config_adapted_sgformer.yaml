@@ -25,6 +25,7 @@ model_params:
     linear_dim: 128
     linear_dropout: 0.1
     graph_weight: 0.8
+    encoding_periods: [100, 120, 50]
     aggregate: 'add'
     pooling: 'mean'
 

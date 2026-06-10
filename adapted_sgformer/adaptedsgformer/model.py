@@ -223,6 +223,7 @@ class AdaptedSGFormer(nn.Module):
                  linear_dropout=0.1,
                  use_graph=True,
                  graph_weight=0.8,
+                 encoding_periods=None,
                  aggregate='add',
                  pooling = 'mean'):
         
@@ -247,6 +248,7 @@ class AdaptedSGFormer(nn.Module):
 
         self.h_map = None
 
+        self.encoding_periods = encoding_periods
         self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
         
         #Pooling layer
@@ -288,7 +290,7 @@ class AdaptedSGFormer(nn.Module):
         #Embedding
         factors = [1, 1, 1e8]
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=100) for (dim_in, fact) in zip(range(3), factors)
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
