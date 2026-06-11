@@ -2,11 +2,11 @@ seed: 12345
 project_name: 'aegnn'
 
 model: "graph_res"
-dataset: "ncaltech101"
+dataset: "ncars"
 task: "recognition"
 
 data_params: 
-  batch_size: 4
+  batch_size: 16 # set to 16 in the article
   num_workers: 8
   pin_memory: True
   shuffle: True
@@ -19,13 +19,13 @@ model_params:
   label_smoothing: 0.1
 
 trainer:
-  max_epochs: 1
+  max_epochs: 30
   overfit_batches: 0
   log_every_n_steps: 1
   gradient_clip_val: 0
 
 callback_params:
-  patience: 5
+  patience: 30
   
 
 log_gradients: True
@@ -33,4 +33,4 @@ profile: True
 debug: True
 
 log_dir: "training_log_aegnn/"
-data_dir: "/home/kevin-imagine/Documents/event_graph/data"
+data_dir: "/home/ibrahim/event_graph_aegnn/test_codes/data"

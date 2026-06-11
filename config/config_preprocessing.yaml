@@ -4,9 +4,9 @@ debug: False
 dataset: 'ncars'
 
 data_params: 
-  batch_size: 8
+  batch_size: 16
   num_workers: 8
   pin_memory: True
   shuffle: True
 
-data_dir: "/home/kevin-imagine/Documents/event_graph/data"
+data_dir: "/home/ibrahim/event_graph_aegnn/test_codes/data"
