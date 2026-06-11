@@ -4,3 +4,12 @@
 [submodule "prophesee_automotive_dataset_toolbox"]
 	path = external/prophesee_automotive_dataset_toolbox
 	url = https://github.com/KevinHOARAU974/prophesee-automotive-dataset-toolbox.git
+[submodule "external/goat"]
+	path = external/goat
+	url = https://github.com/KevinHOARAU974/GOAT.git
+[submodule "external/GRIT"]
+	path = external/GRIT
+	url = https://github.com/KevinHOARAU974/GRIT.git
+[submodule "external/SGFormer"]
+	path = external/SGFormer
+	url = https://github.com/KevinHOARAU974/SGFormer.git
