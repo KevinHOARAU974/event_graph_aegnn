@@ -44,6 +44,7 @@ test_codes/wandb/
 #training_log
 training_log_aegnn/
 optuna_log_aegnn/
+lightning_logs/
 
 #config cluster
 config/*-cluster.yaml
@@ -57,3 +58,4 @@ test_codes/
 
 
 external/prophesee_automotive_dataset_toolbox/tutorial.ipynb/
+training_log_aegnn_multiseed_msub/
