@@ -7,6 +7,7 @@ model_params:
     in_channels: 48
     hidden_channels: 96
     out_channels: 2
+    embedding_pe_aggr: 'cat'
     trans_num_layers: 2
     trans_num_heads: 4
     trans_dropout: 0.5
@@ -27,7 +28,11 @@ model_params:
     graph_weight: 0.8
     encoding_periods: [100, 120, 50]
     aggregate: 'add'
-    pooling: 'mean'
+    pooling_type: 'voxel'
+    pooling_function: 'mean'
+    sensor_size: [120, 100]
+    voxel_div: 4
+
 
 dataset:
   root: "../data/"
