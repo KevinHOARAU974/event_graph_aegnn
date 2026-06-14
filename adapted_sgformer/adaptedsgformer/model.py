@@ -6,9 +6,12 @@ import numpy as np
 
 from torch_geometric.data import Batch
 from torch_geometric.utils import to_dense_batch
-from torch_geometric.nn import global_mean_pool, global_add_pool, global_max_pool
+from torch_geometric.nn import global_mean_pool, global_max_pool
+from typing import List, Optional, Tuple, Union, List
 
 from torch import Tensor
+from torch_geometric.data import Data
+from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
 
 
 from sgformer.large.ours import GraphConv
@@ -123,8 +126,6 @@ class TransConvLayer(nn.Module):
         else:
             return final_output
 
-
-
 class TransConv(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_layers=2, num_heads=1,
                  dropout=0.5, use_bn=True, use_residual=True, use_weight=True, use_act=True):
@@ -200,11 +201,83 @@ class TransConv(nn.Module):
             layer_.append(x)
         return torch.stack(attentions, dim=0)  # [layer num, N, N]
 
+class Max_voxel_pooling(nn.Module):
+
+    def __init__(self, voxel_size: List[int], size: int, start: Optional[Union[float, List[float], Tensor]] = None, end: Optional[Union[float, List[float], Tensor]] = None):
+
+        super(Max_voxel_pooling, self).__init__()
+        self.voxel_size = voxel_size
+        self.size = size
+        self.start = start
+        self.end = end
+
+    def forward(self, x: torch.Tensor, pos: torch.Tensor, batch: Optional[torch.Tensor] = None
+                ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.LongTensor, torch.Tensor, torch.Tensor], Data]:
+        
+        pos = pos.float()
+
+        if batch is not None:
+            batch = batch.long()
+
+        if torch.is_tensor(self.voxel_size):
+            self.voxel_size = self.voxel_size.to(device=pos.device, dtype=pos.dtype)
+        
+        if torch.is_tensor(self.start):
+            self.start = self.start.to(device=pos.device, dtype=pos.dtype)
+
+        if torch.is_tensor(self.end):
+            self.end = self.end.to(device=pos.device, dtype=pos.dtype)
+        
+        # print(f"device end: {self.end}")
+        cluster = voxel_grid(pos, batch=batch, size=self.voxel_size, start=self.start, end=self.end)
+
+        x, _ = max_pool_x(cluster, x, batch, size=self.size)
+        return x
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(voxel_size={self.voxel_size}, size={self.size})"
+    
+class Avg_voxel_pooling(nn.Module):
+
+    def __init__(self, voxel_size: List[int], size: int, start: Optional[Union[float, List[float], Tensor]] = None, end: Optional[Union[float, List[float], Tensor]] = None):
+
+        super(Avg_voxel_pooling, self).__init__()
+        self.voxel_size = voxel_size
+        self.size = size
+        self.start = start
+        self.end = end
+
+    def forward(self, x: torch.Tensor, pos: torch.Tensor, batch: Optional[torch.Tensor] = None
+                ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.LongTensor, torch.Tensor, torch.Tensor], Data]:
+        
+        pos = pos.float()
+
+        if batch is not None:
+            batch = batch.long()
+
+        if torch.is_tensor(self.voxel_size):
+            self.voxel_size = self.voxel_size.to(device=pos.device, dtype=pos.dtype)
+        
+        if torch.is_tensor(self.start):
+            self.start = self.start.to(device=pos.device, dtype=pos.dtype)
+
+        if torch.is_tensor(self.end):
+            self.end = self.end.to(device=pos.device, dtype=pos.dtype)
+        
+        # print(f"device end: {self.end}")
+        cluster = voxel_grid(pos, batch=batch, size=self.voxel_size, start=self.start, end=self.end)
+
+        x, _ = avg_pool_x(cluster, x, batch, size=self.size)
+        return x
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(voxel_size={self.voxel_size}, size={self.size})"
 
 class AdaptedSGFormer(nn.Module):
     def __init__(self, in_channels,
                  hidden_channels,
                  out_channels,
+                 embedding_pe_aggr = 'add',
                  trans_num_layers=1,
                  trans_num_heads=1,
                  trans_dropout=0.5,
@@ -225,61 +298,98 @@ class AdaptedSGFormer(nn.Module):
                  graph_weight=0.8,
                  encoding_periods=None,
                  aggregate='add',
-                 pooling = 'mean'):
+                 pooling_type='global', #or 'voxel'
+                 pooling_function = 'mean',
+                 sensor_size = [120, 100],
+                 voxel_div = 4 #Division of the sensor size
+                 ): 
         
         super().__init__()
+
+        self.embedding_pe_aggr = embedding_pe_aggr
+
+        if embedding_pe_aggr == 'add':
+            layer_in = in_channels
+        elif embedding_pe_aggr == 'cat':
+            layer_in = 2*in_channels
+        else:
+            raise ValueError(f'Invalid embedding pe aggregation :{embedding_pe_aggr}')
 
         self.in_channels = in_channels
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
+        print(f'in_channels:{self.in_channels}')
 
         #Global self attention path
-        self.trans_conv = TransConv(in_channels, hidden_channels, trans_num_layers, trans_num_heads, trans_dropout, trans_use_bn, trans_use_residual, trans_use_weight, trans_use_act)
+        self.trans_conv = TransConv(layer_in, hidden_channels, trans_num_layers, trans_num_heads, trans_dropout, trans_use_bn, trans_use_residual, trans_use_weight, trans_use_act)
 
         #GNN path
-        self.graph_conv = GraphConv(in_channels, hidden_channels, gnn_num_layers, gnn_dropout, gnn_use_bn, gnn_use_residual, gnn_use_weight, gnn_use_init, gnn_use_act)
-
+        self.graph_conv = GraphConv(layer_in, hidden_channels, gnn_num_layers, gnn_dropout, gnn_use_bn, gnn_use_residual, gnn_use_weight, gnn_use_init, gnn_use_act)
 
         self.use_graph = use_graph #If the GNN path is use or not
         self.graph_weight = graph_weight #Convex add
 
         self.aggregate = aggregate #aggregation function
-        self.pooling = pooling #pooling function
+        self.pooling_type = pooling_type
+        self.pooling_function = pooling_function #pooling function
 
         self.h_map = None
 
         self.encoding_periods = encoding_periods
-        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
-        
+        self.x_embedding = nn.Embedding(embedding_dim=self.in_channels, num_embeddings=2)
+
+        self.sensor_size = torch.tensor(sensor_size)
+        self.voxel_div = voxel_div
         #Pooling layer
-        if pooling == 'mean':
-            self.pooling_layer = global_mean_pool
-        elif pooling == 'add':
-            self.pooling_layer = global_add_pool
-        elif pooling == 'max':
-            self.pooling_layer = global_max_pool
+
+        if pooling_type == 'global':
+            if pooling_function == 'mean':
+                self.pooling_layer = global_mean_pool
+            elif pooling_function == 'max':
+                self.pooling_layer = global_max_pool
+            else:
+                raise ValueError(f'Invalid pooling function:{pooling_function}')
+            
+        elif pooling_type == 'voxel':
+            if pooling_function == 'mean':
+                self.pooling_layer = Avg_voxel_pooling(self.sensor_size // voxel_div, size=voxel_div**2, start=[0., 0.], end=self.sensor_size - 1)
+            elif pooling_function == 'max':
+                self.pooling_layer = Max_voxel_pooling(self.sensor_size // voxel_div, size=voxel_div**2, start=[0., 0.], end=self.sensor_size - 1)
+            else:
+                raise ValueError(f'Invalid pooling function:{pooling_function}')
+            
         else:
-            raise ValueError(f'Invalid pooling type:{pooling}')
+                raise ValueError(f'Invalid pooling type:{pooling_type}')
         
         #Classifier head
 
-
-        if aggregate == 'add':
-            self.fc = self.fc = nn.Sequential(
-                nn.Linear(hidden_channels, linear_dim),
-                nn.ReLU(),
-                nn.Dropout(linear_dropout),
-                nn.Linear(linear_dim, out_channels),
+        if pooling_type == 'global':
+            if aggregate == 'add':
+                self.fc = self.fc = nn.Sequential(
+                    nn.Linear(hidden_channels, linear_dim),
+                    nn.ReLU(),
+                    nn.Dropout(linear_dropout),
+                    nn.Linear(linear_dim, out_channels),
+                    )
+            elif aggregate == 'cat':
+                self.fc = nn.Sequential(
+                    nn.Linear(2 * hidden_channels, linear_dim),
+                    nn.ReLU(),
+                    nn.Dropout(linear_dropout),
+                    nn.Linear(linear_dim, out_channels),
+                    )
+            else:
+                raise ValueError(f'Invalid aggregate type:{aggregate}')
+            
+        elif pooling_type == 'voxel':
+            if aggregate == 'add':
+                self.fc = nn.Sequential(
+                    nn.Linear(hidden_channels * self.voxel_div**2, out_channels)
                 )
-        elif aggregate == 'cat':
-            self.fc = nn.Sequential(
-                nn.Linear(2 * hidden_channels, linear_dim),
-                nn.ReLU(),
-                nn.Dropout(linear_dropout),
-                nn.Linear(linear_dim, out_channels),
+            elif aggregate == 'cat':
+                self.fc = nn.Sequential(
+                    nn.Linear(2 * hidden_channels * self.voxel_div**2, out_channels)
                 )
-        else:
-            raise ValueError(f'Invalid aggregate type:{aggregate}')
 
         self.params1 = list(self.trans_conv.parameters())
         self.params2 = list(self.graph_conv.parameters()) if self.graph_conv is not None else []
@@ -296,9 +406,14 @@ class AdaptedSGFormer(nn.Module):
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
         x_emb = self.x_embedding(batch.x.long()).squeeze()
+        
+        # Aggregation embedding features and positionnal encoding
+        if self.embedding_pe_aggr == 'add':
+            batch.x = x_emb + embed_pos
+        elif self.embedding_pe_aggr == 'cat':
+            batch.x = torch.cat((x_emb, embed_pos), dim=1)
 
-        batch.x = x_emb + embed_pos
-
+        # print(batch)
         x1 = self.trans_conv(batch)
         if self.use_graph:
             x2 = self.graph_conv(batch.x, batch.edge_index)
@@ -308,7 +423,14 @@ class AdaptedSGFormer(nn.Module):
                 x = torch.cat((x1, x2), dim=1)
         else:
             x = x1
-        x = self.pooling_layer(x, batch.batch) 
+
+
+        if self.pooling_type == 'global':
+            x = self.pooling_layer(x, batch.batch) 
+        if self.pooling_type == 'voxel':
+            x = self.pooling_layer(x, batch.pos[:,:2], batch=batch.batch)
+            x = x.reshape(batch.num_graphs, -1)
+
         self.h_map = x
         x = self.fc(x)
         return x
