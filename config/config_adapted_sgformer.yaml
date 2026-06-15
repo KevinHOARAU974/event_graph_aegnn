@@ -7,6 +7,7 @@ model_params:
     in_channels: 48
     hidden_channels: 96
     out_channels: 2
+    pe_dim: 10
     embedding_pe_aggr: 'cat'
     trans_num_layers: 2
     trans_num_heads: 4
