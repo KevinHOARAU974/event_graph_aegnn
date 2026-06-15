@@ -277,6 +277,7 @@ class AdaptedSGFormer(nn.Module):
     def __init__(self, in_channels,
                  hidden_channels,
                  out_channels,
+                 pe_dim = 10, #dim for one component of pe
                  embedding_pe_aggr = 'add',
                  trans_num_layers=1,
                  trans_num_heads=1,
@@ -310,8 +311,10 @@ class AdaptedSGFormer(nn.Module):
 
         if embedding_pe_aggr == 'add':
             layer_in = in_channels
+            self.pe_dim = in_channels
         elif embedding_pe_aggr == 'cat':
-            layer_in = 2*in_channels
+            self.pe_dim = 3 * pe_dim
+            layer_in = in_channels + self.pe_dim
         else:
             raise ValueError(f'Invalid embedding pe aggregation :{embedding_pe_aggr}')
 
@@ -400,7 +403,7 @@ class AdaptedSGFormer(nn.Module):
         #Embedding
         factors = [1, 1, 1e8]
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
