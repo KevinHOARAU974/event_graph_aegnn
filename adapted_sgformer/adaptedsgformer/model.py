@@ -510,34 +510,34 @@ class AEGT(nn.Module):
         batch.x = x_emb + embed_pos
 
         x = self.trans1(batch.x, batch.batch)
-        x = self.norm1(x)
+        x = F.gelu(self.norm1(x))
         
-        x = self.trans2(batch.x, batch.batch)
-        x = self.norm2(x)
+        x = self.trans2(x, batch.batch)
+        x = F.gelu(self.norm2(x))
 
         x_c = x.clone()
 
-        x = self.trans3(batch.x, batch.batch)
-        x = self.norm3(x)
+        x = self.trans3(x, batch.batch)
+        x = F.gelu(self.norm3(x))
 
-        x = self.trans4(batch.x, batch.batch)
-        x = self.norm4(x)
+        x = self.trans4(x, batch.batch)
+        x = F.gelu(self.norm4(x))
 
         x = x + x_c
 
-        x = self.trans5(batch.x, batch.batch)
-        x = self.norm5(x)
+        x = self.trans5(x, batch.batch)
+        x = F.gelu(self.norm5(x))
 
         data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
 
         x = data.x.clone()
         x_c = x.clone()
 
-        x = self.trans6(data.x, data.batch)
-        x = self.norm6(x)
+        x = self.trans6(x, data.batch)
+        x = F.gelu(self.norm6(x))
 
-        x = self.trans7(data.x, data.batch)
-        x = self.norm7(x)
+        x = self.trans7(x, data.batch)
+        x = F.gelu(self.norm7(x))
 
         x = x + x_c
 

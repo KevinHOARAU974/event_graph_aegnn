@@ -1,0 +1,40 @@
+seed: 12345
+project_name : 'adapted_sgformer'
+
+model: "aegt"
+
+task: "recognition"
+
+model_params:
+  in_channels: 36
+  out_channels: 2
+  num_heads: 1
+  pooling_size: 
+    - 16
+    - 12
+  input_shape: [120, 100]
+  max_periods: [120, 100, 50] 
+
+
+dataset:
+  root: "../data/"
+  name: "ncars"
+
+dataloader:  
+  batch_size : 16
+  num_workers: 8
+  pin_memory: True
+
+criterion:
+  label_smoothing : 0.1
+
+max_epochs : 1
+
+optimizer:
+  lr : 1e-4
+  weight_decay : 5e-5
+
+scheduler:
+  eta_min: 0.0
+
+log_dir: "./test_asgf"

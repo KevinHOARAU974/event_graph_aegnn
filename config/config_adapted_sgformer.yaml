@@ -1,11 +1,11 @@
 seed: 12345
 project_name : 'adapted_sgformer'
 
-model: "AEGT"
+model: "adapted_sgformer"
 
 task: "recognition"
 
-model_params_asgf:
+model_params:
     in_channels: 48
     hidden_channels: 96
     out_channels: 2
@@ -35,17 +35,6 @@ model_params_asgf:
     pooling_function: 'mean'
     sensor_size: [120, 100]
     voxel_div: 4
-
-model_params_aegt:
-  in_channels: 36
-  out_channels: 2
-  num_heads: 1
-  pooling_size: 
-    - 16
-    - 12
-  input_shape: [120, 100]
-  max_periods: [120, 100, 50] 
-
 
 dataset:
   root: "../data/"
