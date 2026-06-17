@@ -32,8 +32,10 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_cl
     model.to(device)
     model.train()
 
-    loss_ls = []
-    acc_ls = []
+    tot_loss = 0.0
+    tot_acc = 0.0
+    nb_sample = 0
+
 
     for batch in tqdm(train_loader):
 
@@ -47,14 +49,17 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_cl
 
         optimizer.step()
 
-        loss_ls.append(loss.item())
+        tot_loss += loss.item() * batch.batch_size
+        nb_sample += batch.batch_size
 
         y_prediction = torch.argmax(out, dim=-1)
-        acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
+
+        tot_acc += (y_prediction == batch.y).sum().item()
+        # acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
 
     scheduler.step()
 
-    return np.mean(np.array(loss_ls)), np.mean(np.array(acc_ls))
+    return tot_loss/nb_sample, tot_acc/nb_sample
 
 
 
@@ -63,8 +68,9 @@ def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'
     model.to(device)
     model.eval()
 
-    loss_ls = []
-    acc_ls = []
+    tot_loss = 0.0
+    tot_acc = 0.0
+    nb_sample = 0
 
     with torch.no_grad():
         for batch in tqdm(val_loader):
@@ -74,23 +80,26 @@ def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'
             out = model(batch)
             loss = criterion(out, batch.y)
 
-            loss_ls.append(loss.item())
+            tot_loss += loss.item() * batch.batch_size
+            nb_sample += batch.batch_size
 
             y_prediction = torch.argmax(out, dim=-1)
-            acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
 
-    return np.mean(np.array(loss_ls)), np.mean(np.array(acc_ls))
+            tot_acc += (y_prediction == batch.y).sum().item()
+
+    return tot_loss/nb_sample, tot_acc/nb_sample
 
 def test_model(model, test_loader, criterion, checkpoint_path, num_classes = 2, device='cuda'):
 
     model.to(device)
     model.eval()
 
-    loss_ls = []
-    acc_ls = []
+    tot_loss = 0.0
+    tot_acc = 0.0
+    nb_sample = 0
 
-    y_targets = []
-    y_preds = []
+    # y_targets = []
+    # y_preds = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -100,38 +109,40 @@ def test_model(model, test_loader, criterion, checkpoint_path, num_classes = 2, 
             out = model(batch)
             loss = criterion(out, batch.y)
 
-            loss_ls.append(loss.item())
+            tot_loss += loss.item() * batch.batch_size
+            nb_sample += batch.batch_size
 
             y_prediction = torch.argmax(out, dim=-1)
-            acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
 
-            y_targets.append(batch.y)
-            y_preds.append(y_prediction)
+            tot_acc += (y_prediction == batch.y).sum().item()
+
+            # y_targets.append(batch.y)
+            # y_preds.append(y_prediction)
     
-    preds = torch.cat(y_preds)
-    targets = torch.cat(y_targets)
+    # preds = torch.cat(y_preds)
+    # targets = torch.cat(y_targets)
 
-    cm = confusion_matrix(targets.cpu().numpy(), 
-                          preds.cpu().numpy())
+    # cm = confusion_matrix(targets.cpu().numpy(), 
+    #                       preds.cpu().numpy())
 
-    fig, ax = plt.subplots(figsize=(8, 8))
+    # fig, ax = plt.subplots(figsize=(8, 8))
 
-    disp = ConfusionMatrixDisplay(
-        confusion_matrix=cm,
-        # display_labels=data_module.classes
-    )
+    # disp = ConfusionMatrixDisplay(
+    #     confusion_matrix=cm,
+    #     # display_labels=data_module.classes
+    # )
 
-    disp.plot(
-        ax=ax,
-        xticks_rotation=90,
-        colorbar=True
-    )
+    # disp.plot(
+    #     ax=ax,
+    #     xticks_rotation=90,
+    #     colorbar=True
+    # )
 
-    plt.tight_layout()
-    plt.savefig(f"{checkpoint_path}/confusion_matrix.png", dpi=300)
-    plt.close()
+    # plt.tight_layout()
+    # plt.savefig(f"{checkpoint_path}/confusion_matrix.png", dpi=300)
+    # plt.close()
 
-    return np.mean(np.array(loss_ls)), np.mean(np.array(acc_ls))
+    return tot_loss/nb_sample, tot_acc/nb_sample
 
 
 def main() -> None:
@@ -167,11 +178,11 @@ def main() -> None:
 
     if cfg["model"] == 'adapted_sgformer':
         model = AdaptedSGFormer(**cfg['model_params'])
-        num_classes = cfg['model_params']['out_channels']
-    elif cfg["model"] == 'AEGT':
+    elif cfg["model"] == 'aegt':
         model = AEGT(**cfg['model_params'])
-        num_classes = cfg['model_params']['out_channels']
         cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
+    
+    num_classes = cfg['model_params']['out_channels']
 
     print(f'Model {cfg["model"]}: Check')
 
@@ -190,7 +201,7 @@ def main() -> None:
                 {'params': model.params2}
             ],
             **cfg['optimizer'])
-    elif cfg["model"] == 'AEGT':
+    elif cfg["model"] == 'aegt':
         optimizer = torch.optim.Adam(model.parameters(),
             **cfg['optimizer'])
 
@@ -288,7 +299,7 @@ def main() -> None:
 
     if cfg["model"] == 'adapted_sgformer':
         best_model = AdaptedSGFormer(**cfg['model_params'])
-    elif cfg["model"] == 'AEGT':
+    elif cfg["model"] == 'aegt':
         best_model = AEGT(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint["model_state_dict"])
