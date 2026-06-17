@@ -166,12 +166,12 @@ def main() -> None:
     ### Model
 
     if cfg["model"] == 'adapted_sgformer':
-        model = AdaptedSGFormer(**cfg['model_params_asgf'])
-        num_classes = cfg['model_params_asgf']['out_channels']
+        model = AdaptedSGFormer(**cfg['model_params'])
+        num_classes = cfg['model_params']['out_channels']
     elif cfg["model"] == 'AEGT':
-        model = AEGT(**cfg['model_params_aegt'])
-        num_classes = cfg['model_params_aegt']['out_channels']
-        cfg['model_params_aegt']['pooling_size'] = tuple(cfg['model_params_aegt']['pooling_size'])
+        model = AEGT(**cfg['model_params'])
+        num_classes = cfg['model_params']['out_channels']
+        cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
 
     print(f'Model {cfg["model"]}: Check')
 
@@ -204,7 +204,7 @@ def main() -> None:
     #Log directory
 
     date_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    checkpoint_path = os.path.expanduser(os.path.join(cfg["log_dir"], "checkpoints", cfg["dataset"]["name"], cfg["task"], date_time))
+    checkpoint_path = os.path.expanduser(os.path.join(cfg["log_dir"], "checkpoints", cfg['model'] ,cfg["dataset"]["name"], cfg["task"], date_time))
     Path(checkpoint_path).mkdir(parents=True,exist_ok=True)
     
     #wandb setup
@@ -287,9 +287,9 @@ def main() -> None:
     best_checkpoint = torch.load(f"{checkpoint_path}/best.pth", weights_only=False)
 
     if cfg["model"] == 'adapted_sgformer':
-        best_model = AdaptedSGFormer(**cfg['model_params_asgf'])
+        best_model = AdaptedSGFormer(**cfg['model_params'])
     elif cfg["model"] == 'AEGT':
-        best_model = AEGT(**cfg['model_params_aegt'])
+        best_model = AEGT(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint["model_state_dict"])
 
