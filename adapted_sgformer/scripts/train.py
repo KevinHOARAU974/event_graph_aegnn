@@ -289,7 +289,7 @@ def main() -> None:
     if cfg["model"] == 'adapted_sgformer':
         best_model = AdaptedSGFormer(**cfg['model_params_asgf'])
     elif cfg["model"] == 'AEGT':
-        model = AEGT(**cfg['model_params_aegt'])
+        best_model = AEGT(**cfg['model_params_aegt'])
 
     best_model.load_state_dict(best_checkpoint["model_state_dict"])
 
