@@ -222,7 +222,7 @@ def main() -> None:
 
     wandb.init(
     project=cfg['project_name'],
-    name=f"{cfg['project_name']}-{cfg['task']}-{date_time}",
+    name=f"{cfg['model']}-{cfg['task']}-{date_time}",
     config=cfg)   
 
     wandb.config.update(get_git_info())
