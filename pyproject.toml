@@ -64,6 +64,8 @@ dependencies = [
     "opt-einsum>=3.4.0",
     "sgformer>=0.0.0",
     "adapted-sgformer>=0.0.0",
+    "h5py>=3.16.0",
+    "hdf5plugin>=6.0.0",
 ]
 
 [tool.uv.workspace]

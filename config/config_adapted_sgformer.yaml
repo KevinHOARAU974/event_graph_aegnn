@@ -1,22 +1,24 @@
 seed: 12345
 project_name : 'adapted_sgformer'
 
+model: "AEGT"
+
 task: "recognition"
 
-model_params:
+model_params_asgf:
     in_channels: 48
     hidden_channels: 96
     out_channels: 2
     pe_dim: 10
-    embedding_pe_aggr: 'cat'
-    trans_num_layers: 2
+    embedding_pe_aggr: 'add'
+    trans_num_layers: 12
     trans_num_heads: 4
     trans_dropout: 0.5
     trans_use_bn: True
     trans_use_residual: True
     trans_use_weight: True
     trans_use_act: True
-    gnn_num_layers: 1
+    gnn_num_layers: 0
     gnn_dropout: 0.5
     gnn_use_weight: True
     gnn_use_init: False
@@ -33,6 +35,16 @@ model_params:
     pooling_function: 'mean'
     sensor_size: [120, 100]
     voxel_div: 4
+
+model_params_aegt:
+  in_channels: 36
+  out_channels: 2
+  num_heads: 1
+  pooling_size: 
+    - 16
+    - 12
+  input_shape: [120, 100]
+  max_periods: [120, 100, 50] 
 
 
 dataset:

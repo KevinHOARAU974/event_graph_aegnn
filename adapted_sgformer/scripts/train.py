@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from torch_geometric.loader import DataLoader
 
-from adaptedsgformer.model import AdaptedSGFormer
+from adaptedsgformer.model import AdaptedSGFormer, AEGT
 from adaptedsgformer.dataset import GraphDataset
 from torchmetrics.functional import accuracy
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
@@ -165,9 +165,15 @@ def main() -> None:
     print("Dataloaders : Check")
     ### Model
 
-    model = AdaptedSGFormer(**cfg['model_params'])
+    if cfg["model"] == 'adapted_sgformer':
+        model = AdaptedSGFormer(**cfg['model_params_asgf'])
+        num_classes = cfg['model_params_asgf']['out_channels']
+    elif cfg["model"] == 'AEGT':
+        model = AEGT(**cfg['model_params_aegt'])
+        num_classes = cfg['model_params_aegt']['out_channels']
+        cfg['model_params_aegt']['pooling_size'] = tuple(cfg['model_params_aegt']['pooling_size'])
 
-    print("Model: Check")
+    print(f'Model {cfg["model"]}: Check')
 
     ### Criterion, optimizer, scheduler
 
@@ -178,11 +184,16 @@ def main() -> None:
     cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay'])
     cfg['scheduler']['eta_min'] = float(cfg['scheduler']['eta_min'])
 
-    optimizer = torch.optim.Adam([
-            {'params': model.params1},
-            {'params': model.params2}
-        ],
-           **cfg['optimizer'])
+    if cfg["model"] == 'adapted_sgformer':
+        optimizer = torch.optim.Adam([
+                {'params': model.params1},
+                {'params': model.params2}
+            ],
+            **cfg['optimizer'])
+    elif cfg["model"] == 'AEGT':
+        optimizer = torch.optim.Adam(model.parameters(),
+            **cfg['optimizer'])
+
     
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['max_epochs'], **cfg['scheduler'])
 
@@ -215,6 +226,7 @@ def main() -> None:
 
     print("Start training")
 
+
     for epoch in tqdm(range(cfg['max_epochs'])):
 
         train_loss, train_acc = train_one_epoch(
@@ -223,7 +235,7 @@ def main() -> None:
             criterion_train,
             optimizer,
             scheduler,
-            num_classes=cfg['model_params']['out_channels'],
+            num_classes=num_classes,
             device=device
         )
 
@@ -231,7 +243,7 @@ def main() -> None:
             model,
             val_dataloader,
             criterion_test,
-            num_classes=cfg['model_params']['out_channels'],
+            num_classes=num_classes,
             device=device
         )
 
@@ -274,13 +286,16 @@ def main() -> None:
 
     best_checkpoint = torch.load(f"{checkpoint_path}/best.pth", weights_only=False)
 
-    best_model = AdaptedSGFormer(**cfg['model_params'])
+    if cfg["model"] == 'adapted_sgformer':
+        best_model = AdaptedSGFormer(**cfg['model_params_asgf'])
+    elif cfg["model"] == 'AEGT':
+        model = AEGT(**cfg['model_params_aegt'])
 
     best_model.load_state_dict(best_checkpoint["model_state_dict"])
 
     # Test the best model
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, checkpoint_path, num_classes=cfg['model_params']['out_channels'], device=device)
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, checkpoint_path, num_classes=num_classes, device=device)
 
 
     wandb.log({

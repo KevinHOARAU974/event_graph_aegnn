@@ -12,9 +12,12 @@ from typing import List, Optional, Tuple, Union, List
 from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
+from torch_geometric.nn.norm import BatchNorm
+
 
 
 from sgformer.large.ours import GraphConv
+from aegnn.models.layer import MaxPooling
 
 
 def embed_1D_scalar(t, dim, max_period):
@@ -447,3 +450,99 @@ class AdaptedSGFormer(nn.Module):
         self.trans_conv.reset_parameters()
         if self.use_graph:
             self.graph_conv.reset_parameters()
+
+
+class AEGT(nn.Module):
+
+    def __init__(self,in_channels = 36,
+                 out_channels = 2,
+                 num_heads = 1,
+                 pooling_size = (16,12),
+                 input_shape = [120, 100],
+                 max_periods = [120,100,50]):
+
+        super(AEGT, self).__init__()
+
+        # assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
+        
+        self.input_shape = torch.tensor(input_shape)
+
+        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
+
+        self.encoding_periods = max_periods
+
+        self.in_channels = in_channels
+
+        self.trans1 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm1 = BatchNorm(in_channels)
+        self.trans2 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm2 = BatchNorm(in_channels)
+        self.trans3 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm3 = BatchNorm(in_channels)
+        self.trans4 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm4 = BatchNorm(in_channels)
+        self.trans5 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm5 = BatchNorm(in_channels)
+
+        self.pool5 = MaxPooling(pooling_size, start = [0., 0.], end= self.input_shape-1)
+
+        self.trans6 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm6 = BatchNorm(in_channels)
+        self.trans7 = TransConvLayer(in_channels, in_channels, num_heads)
+        self.norm7 = BatchNorm(in_channels)
+
+        self.pool7 = Max_voxel_pooling(self.input_shape//4, size=16, start = [0., 0.], end= self.input_shape-1)
+        self.fc = nn.Linear(in_channels * 16, out_features=out_channels, bias=True)
+
+
+    def forward(self, batch : Batch):
+
+        #Embedding
+        factors = [1, 1, 1e8]
+        embed_pos = torch.stack([
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+        ], dim=1)
+
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+        x_emb = self.x_embedding(batch.x.long()).squeeze()
+
+        batch.x = x_emb + embed_pos
+
+        x = self.trans1(batch.x, batch.batch)
+        x = self.norm1(x)
+        
+        x = self.trans2(batch.x, batch.batch)
+        x = self.norm2(x)
+
+        x_c = x.clone()
+
+        x = self.trans3(batch.x, batch.batch)
+        x = self.norm3(x)
+
+        x = self.trans4(batch.x, batch.batch)
+        x = self.norm4(x)
+
+        x = x + x_c
+
+        x = self.trans5(batch.x, batch.batch)
+        x = self.norm5(x)
+
+        data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
+
+        x = data.x.clone()
+        x_c = x.clone()
+
+        x = self.trans6(data.x, data.batch)
+        x = self.norm6(x)
+
+        x = self.trans7(data.x, data.batch)
+        x = self.norm7(x)
+
+        x = x + x_c
+
+        x = self.pool7(x, pos = data.pos[:, :2], batch = data.batch)
+
+        x = x.reshape(data.num_graphs, -1)
+
+        return self.fc(x)
