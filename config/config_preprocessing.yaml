@@ -9,4 +9,6 @@ data_params:
   pin_memory: True
   shuffle: True
 
+format : "h5"
+
 data_dir: "/home/kevin-imagine/Documents/event_graph/data"

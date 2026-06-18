@@ -459,7 +459,8 @@ class AEGT(nn.Module):
                  num_heads = 1,
                  pooling_size = (16,12),
                  input_shape = [120, 100],
-                 max_periods = [120,100,50]):
+                 max_periods = [120,100,50],
+                 dropout = 0.1):
 
         super(AEGT, self).__init__()
 
@@ -492,7 +493,11 @@ class AEGT(nn.Module):
         self.norm7 = BatchNorm(in_channels)
 
         self.pool7 = Max_voxel_pooling(self.input_shape//4, size=16, start = [0., 0.], end= self.input_shape-1)
-        self.fc = nn.Linear(in_channels * 16, out_features=out_channels, bias=True)
+        self.fc = nn.Sequential(nn.Linear(in_channels * 16, 128, bias=True),
+                                nn.GELU(),
+                                nn.Dropout(dropout),
+                                nn.Linear(128, out_channels)
+        )
 
 
     def forward(self, batch : Batch):
