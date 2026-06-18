@@ -16,6 +16,9 @@ model_params:
   max_periods: [120, 100, 50] 
   dropout: 0.1
 
+early_stopping:
+  patience: 5
+  min_delta: 1e-3
 
 dataset:
   root: "../data/"
@@ -33,7 +36,7 @@ max_epochs : 1
 
 optimizer:
   lr : 1e-4
-  weight_decay : 5e-5
+  weight_decay : 0.0
 
 scheduler:
   eta_min: 0.0

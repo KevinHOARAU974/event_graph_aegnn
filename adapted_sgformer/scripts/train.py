@@ -65,7 +65,6 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_cl
 
 def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'):
 
-    model.to(device)
     model.eval()
 
     tot_loss = 0.0
@@ -89,9 +88,8 @@ def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
-def test_model(model, test_loader, criterion, checkpoint_path, num_classes = 2, device='cuda'):
+def test_model(model, test_loader, criterion, num_classes = 2, device='cuda'):
 
-    model.to(device)
     model.eval()
 
     tot_loss = 0.0
@@ -180,7 +178,7 @@ def main() -> None:
         model = AdaptedSGFormer(**cfg['model_params'])
     elif cfg["model"] == 'aegt':
         model = AEGT(**cfg['model_params'])
-        cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
+        # cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
     
     num_classes = cfg['model_params']['out_channels']
 
@@ -192,17 +190,17 @@ def main() -> None:
     criterion_test = nn.CrossEntropyLoss()
 
     cfg['optimizer']['lr'] = float(cfg['optimizer']['lr'])
-    cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay'])
+    cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay']) if cfg['optimizer']['weight_decay'] != None else None
     cfg['scheduler']['eta_min'] = float(cfg['scheduler']['eta_min'])
 
     if cfg["model"] == 'adapted_sgformer':
-        optimizer = torch.optim.Adam([
+        optimizer = torch.optim.AdamW([
                 {'params': model.params1},
                 {'params': model.params2}
             ],
             **cfg['optimizer'])
     elif cfg["model"] == 'aegt':
-        optimizer = torch.optim.Adam(model.parameters(),
+        optimizer = torch.optim.AdamW(model.parameters(),
             **cfg['optimizer'])
 
     
@@ -233,12 +231,19 @@ def main() -> None:
     wandb.define_metric("*", step_metric="epoch")
 
     #Training pipeline
-    best_val = -1
+    best_acc = -1
+    best_loss = float("inf")
+
+    patience = cfg['early_stopping']["patience"]
+    min_delta = float(cfg['early_stopping']["min_delta"])
+
+    epochs_without_improvement = 0
 
     print("Start training")
 
-
     for epoch in tqdm(range(cfg['max_epochs'])):
+
+        model.to(device)
 
         train_loss, train_acc = train_one_epoch(
             model,
@@ -267,16 +272,35 @@ def main() -> None:
             'lr': scheduler.get_last_lr()[0],
         })
 
-        if val_acc > best_val:
-            best_val = val_acc
+        improved_loss = val_loss < best_loss - min_delta
+
+        if improved_loss:
+
+            best_loss = val_loss
+            epoch_without_improvement = 0
+
             torch.save({
                         "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scheduler_state_dict": scheduler.state_dict(),
                         "epoch": epoch,
-                        "best_val_acc": best_val,
+                        "best_val_acc": best_acc,
                         "cfg": cfg,
-                        }, f"{checkpoint_path}/best.pth")
+                        }, f"{checkpoint_path}/best_loss.pth")
+        
+        else:
+            epochs_without_improvement += 1
+
+        if val_acc > best_acc:
+            best_acc = val_acc
+            torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "scheduler_state_dict": scheduler.state_dict(),
+                        "epoch": epoch,
+                        "best_val_acc": best_acc,
+                        "cfg": cfg,
+                        }, f"{checkpoint_path}/best_acc.pth")
         
         torch.save({
                     "model_state_dict": model.state_dict(),
@@ -284,35 +308,65 @@ def main() -> None:
                     "scheduler_state_dict": scheduler.state_dict(),
                     "epoch": epoch,
                     "last_val_acc": val_acc,
+                    "last_val_loss": val_loss,
                     "cfg": cfg,
                     }, f"{checkpoint_path}/last.pth")
+        
 
         print(f'Epoch {epoch}:')
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
         print(f'Val_loss : {val_loss}, Val_acc : {val_acc}')
 
+        if epoch_without_improvement >= patience:
+            print(f"Early stopping at epoch: {epoch}")
+            break
+
     #Test
 
-    #Load best model
+    #Load best model in accuracy
 
-    best_checkpoint = torch.load(f"{checkpoint_path}/best.pth", weights_only=False)
+    best_checkpoint_acc = torch.load(f"{checkpoint_path}/best_acc.pth", weights_only=False)
 
     if cfg["model"] == 'adapted_sgformer':
         best_model = AdaptedSGFormer(**cfg['model_params'])
     elif cfg["model"] == 'aegt':
         best_model = AEGT(**cfg['model_params'])
 
-    best_model.load_state_dict(best_checkpoint["model_state_dict"])
+    best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
+
+    best_model.to(device)
 
     # Test the best model
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, checkpoint_path, num_classes=num_classes, device=device)
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, num_classes=num_classes, device=device)
 
 
     wandb.log({
             # 'epoch' : epoch,
-            'test/loss' : test_loss,
-            'test/acc' : test_acc,
+            'best_acc_model/loss' : test_loss,
+            'best_acc_model/acc' : test_acc,
+        })
+    
+    best_checkpoint_loss = torch.load(f"{checkpoint_path}/best_loss.pth", weights_only=False)
+
+    if cfg["model"] == 'adapted_sgformer':
+        best_model = AdaptedSGFormer(**cfg['model_params'])
+    elif cfg["model"] == 'aegt':
+        best_model = AEGT(**cfg['model_params'])
+
+    best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
+
+    best_model.to(device)
+
+    # Test the best model
+
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, num_classes=num_classes, device=device)
+
+
+    wandb.log({
+            # 'epoch' : epoch,
+            'best_loss_model/loss' : test_loss,
+            'best_loss_model/acc' : test_acc,
         })
 
     wandb.finish()

@@ -49,7 +49,7 @@ lightning_logs/
 results.csv
 
 #config cluster
-config/*-cluster.yaml
+config/*-cluster-*.yaml
 
 #test code
 test_codes/
