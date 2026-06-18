@@ -29,7 +29,6 @@ def load_config(config_path: str) -> dict:
 
 def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_classes = 2, device='cuda'):
 
-    model.to(device)
     model.train()
 
     tot_loss = 0.0
@@ -236,6 +235,7 @@ def main() -> None:
 
     patience = cfg['early_stopping']["patience"]
     min_delta = float(cfg['early_stopping']["min_delta"])
+    min_epochs = float(cfg['early_stopping']["min_epochs"])
 
     epochs_without_improvement = 0
 
@@ -277,7 +277,7 @@ def main() -> None:
         if improved_loss:
 
             best_loss = val_loss
-            epoch_without_improvement = 0
+            epochs_without_improvement = 0
 
             torch.save({
                         "model_state_dict": model.state_dict(),
@@ -317,7 +317,7 @@ def main() -> None:
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
         print(f'Val_loss : {val_loss}, Val_acc : {val_acc}')
 
-        if epoch_without_improvement >= patience:
+        if epochs_without_improvement >= patience and epoch >= min_epochs:
             print(f"Early stopping at epoch: {epoch}")
             break
 
@@ -336,8 +336,6 @@ def main() -> None:
 
     best_model.to(device)
 
-    # Test the best model
-
     test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, num_classes=num_classes, device=device)
 
 
@@ -346,6 +344,9 @@ def main() -> None:
             'best_acc_model/loss' : test_loss,
             'best_acc_model/acc' : test_acc,
         })
+    
+
+    #Load best model in loss
     
     best_checkpoint_loss = torch.load(f"{checkpoint_path}/best_loss.pth", weights_only=False)
 

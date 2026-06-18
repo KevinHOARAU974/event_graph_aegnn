@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, Union, List
 from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
-from torch_geometric.nn.norm import BatchNorm
+from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 
 
@@ -452,6 +452,41 @@ class AdaptedSGFormer(nn.Module):
             self.graph_conv.reset_parameters()
 
 
+class BlockGT(nn.Module):
+
+    def __init__(self, in_channels,
+                 out_channels,
+                 num_heads,
+                 dropout_layer = True,
+                 dropout_val = 0.1,
+                 norm_func = 'layer',
+                 ):
+        super(BlockGT, self).__init__()
+
+        self.trans = TransConvLayer(in_channels, out_channels, num_heads)
+        
+        if norm_func == 'layer':
+            norm = LayerNorm
+        elif norm_func == 'batch':
+            norm = BatchNorm
+
+        self.norm = norm(out_channels)
+
+        self.dropout_layer = dropout_layer
+
+        if dropout_layer:
+            self.dropout = nn.Dropout(dropout_val)
+    
+    def forward(self, x: Tensor, batch: Tensor):
+
+        x = self.trans(x, batch)
+        x = F.gelu(self.norm(x))
+
+        if self.dropout_layer:
+            x = self.dropout(x)
+
+        return x
+
 class AEGT(nn.Module):
 
     def __init__(self,in_channels = 36,
@@ -460,7 +495,9 @@ class AEGT(nn.Module):
                  pooling_size = (16,12),
                  input_shape = [120, 100],
                  max_periods = [120,100,50],
-                 dropout = 0.1):
+                 dropout_layer = True,
+                 dropout_val = 0.1,
+                 norm_func = 'layer'):
 
         super(AEGT, self).__init__()
 
@@ -474,28 +511,21 @@ class AEGT(nn.Module):
 
         self.in_channels = in_channels
 
-        self.trans1 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm1 = BatchNorm(in_channels)
-        self.trans2 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm2 = BatchNorm(in_channels)
-        self.trans3 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm3 = BatchNorm(in_channels)
-        self.trans4 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm4 = BatchNorm(in_channels)
-        self.trans5 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm5 = BatchNorm(in_channels)
+        self.block1 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block2 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block3 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block4 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block5 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
 
         self.pool5 = MaxPooling(pooling_size, start = [0., 0.], end= self.input_shape-1)
 
-        self.trans6 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm6 = BatchNorm(in_channels)
-        self.trans7 = TransConvLayer(in_channels, in_channels, num_heads)
-        self.norm7 = BatchNorm(in_channels)
-
+        self.block6 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block7 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+    
         self.pool7 = Max_voxel_pooling(self.input_shape//4, size=16, start = [0., 0.], end= self.input_shape-1)
         self.fc = nn.Sequential(nn.Linear(in_channels * 16, 128, bias=True),
                                 nn.GELU(),
-                                nn.Dropout(dropout),
+                                nn.Dropout(dropout_val),
                                 nn.Linear(128, out_channels)
         )
 
@@ -512,37 +542,26 @@ class AEGT(nn.Module):
 
         x_emb = self.x_embedding(batch.x.long()).squeeze()
 
-        batch.x = x_emb + embed_pos
+        x = x_emb + embed_pos
 
-        x = self.trans1(batch.x, batch.batch)
-        x = F.gelu(self.norm1(x))
-        
-        x = self.trans2(x, batch.batch)
-        x = F.gelu(self.norm2(x))
+        x = self.block1(x, batch.batch)
+        x = self.block2(x, batch.batch)
 
         x_c = x.clone()
 
-        x = self.trans3(x, batch.batch)
-        x = F.gelu(self.norm3(x))
-
-        x = self.trans4(x, batch.batch)
-        x = F.gelu(self.norm4(x))
+        x = self.block3(x, batch.batch)
+        x = self.block4(x, batch.batch)
 
         x = x + x_c
 
-        x = self.trans5(x, batch.batch)
-        x = F.gelu(self.norm5(x))
+        x = self.block5(x, batch.batch)
 
         data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
 
-        x = data.x.clone()
-        x_c = x.clone()
+        x_c = data.x.clone()
 
-        x = self.trans6(x, data.batch)
-        x = F.gelu(self.norm6(x))
-
-        x = self.trans7(x, data.batch)
-        x = F.gelu(self.norm7(x))
+        x = self.block6(data.x, data.batch)
+        x = self.block7(x, data.batch)
 
         x = x + x_c
 
