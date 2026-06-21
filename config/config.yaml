@@ -1,14 +1,14 @@
 callback_params:
   patience: 30
-data_dir: /home/ibrahim/event_graph_aegnn/test_codes/data
+data_dir: /home/ibrahim/event_graph_aegnn/test_codes/data/
 data_params:
-  batch_size: 16
+  batch_size: 8
   num_workers: 8
   pin_memory: true
   shuffle: true
 dataset: ncars
 debug: true
-log_dir: training_log_aegnn_multiseed_msub/
+log_dir: external/training_log_aegnn/
 log_gradients: true
 model: graph_res
 model_params:
@@ -16,13 +16,13 @@ model_params:
   eta_min: 0.0
   label_smoothing: 0.1
   lr: 0.001
-  weight_decay: 5.0e-05 
+  weight_decay: 5.0e-05
 profile: true
-project_name: aegnn_benchmark
-seed: 1
+project_name: aegnn_adaptative_graph
+seed: 12345
 task: recognition
 trainer:
   gradient_clip_val: 0
   log_every_n_steps: 1
-  max_epochs: 1
+  max_epochs: 30
   overfit_batches: 0
