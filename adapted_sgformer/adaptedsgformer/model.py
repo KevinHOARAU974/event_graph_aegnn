@@ -457,33 +457,47 @@ class BlockGT(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
-                 dropout_layer = True,
-                 dropout_val = 0.1,
+                 dropout_trans = 0.1,
+                 dropout_ff = 0.1,
                  norm_func = 'layer',
                  ):
         super(BlockGT, self).__init__()
 
-        self.trans = TransConvLayer(in_channels, out_channels, num_heads)
-        
         if norm_func == 'layer':
             norm = LayerNorm
         elif norm_func == 'batch':
             norm = BatchNorm
 
-        self.norm = norm(out_channels)
+        self.norm1 = norm(in_channels) 
+        self.trans = TransConvLayer(in_channels, out_channels, num_heads)
+        self.dropout1 = nn.Dropout(dropout_trans)
 
-        self.dropout_layer = dropout_layer
+        self.norm2 = norm(out_channels)
+        self.ff = nn.Sequential(
+            nn.Linear(out_channels, 4*out_channels, bias=True),
+            nn.GELU(),
+            nn.Dropout(dropout_ff),
+            nn.Linear(4*out_channels, out_channels),
+            nn.Dropout(dropout_ff)
+        )
 
-        if dropout_layer:
-            self.dropout = nn.Dropout(dropout_val)
-    
+
     def forward(self, x: Tensor, batch: Tensor):
 
-        x = self.trans(x, batch)
-        x = F.gelu(self.norm(x))
+        x_c = x
 
-        if self.dropout_layer:
-            x = self.dropout(x)
+        x = self.norm1(x)
+        x = self.trans(x, batch)
+        x = self.dropout1(x)
+
+        x = x + x_c
+        
+        x_c = x 
+
+        x = self.norm2(x)
+        x = self.ff(x)
+
+        x = x + x_c
 
         return x
 
@@ -495,8 +509,9 @@ class AEGT(nn.Module):
                  pooling_size = (16,12),
                  input_shape = [120, 100],
                  max_periods = [120,100,50],
-                 dropout_layer = True,
-                 dropout_val = 0.1,
+                 dropout_trans = 0.1,
+                 dropout_ff = 0.1,
+                 dropout_classifier = 0.1,
                  norm_func = 'layer'):
 
         super(AEGT, self).__init__()
@@ -511,21 +526,21 @@ class AEGT(nn.Module):
 
         self.in_channels = in_channels
 
-        self.block1 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
-        self.block2 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
-        self.block3 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
-        self.block4 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
-        self.block5 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block1 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
+        self.block2 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
+        self.block3 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
+        self.block4 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
+        self.block5 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
 
         self.pool5 = MaxPooling(pooling_size, start = [0., 0.], end= self.input_shape-1)
 
-        self.block6 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
-        self.block7 = BlockGT(in_channels, in_channels, num_heads, dropout_layer=dropout_layer, dropout_val=dropout_val, norm_func=norm_func)
+        self.block6 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
+        self.block7 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
     
         self.pool7 = Max_voxel_pooling(self.input_shape//4, size=16, start = [0., 0.], end= self.input_shape-1)
         self.fc = nn.Sequential(nn.Linear(in_channels * 16, 128, bias=True),
                                 nn.GELU(),
-                                nn.Dropout(dropout_val),
+                                nn.Dropout(dropout_classifier),
                                 nn.Linear(128, out_channels)
         )
 

@@ -14,8 +14,9 @@ model_params:
     - 12
   input_shape: [120, 100]
   max_periods: [120, 100, 50]
-  dropout_layer: True
-  dropout_val: 0.1
+  dropout_trans: 0.1
+  dropout_ff: 0.1
+  dropout_classifier: 0.1
   norm_func: 'layer'
 
 
