@@ -94,8 +94,12 @@ class TransConvLayer(nn.Module):
         vs[~mask_dense] = 0.0
 
         # normalize input
-        qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M]
-        ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M]
+        # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M]
+        # ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M]
+
+        qs = F.normalize(qs, p=2, dim=-1, eps=1e-6)
+        ks = F.normalize(ks, p=2, dim=-1, eps=1e-6)
+
         N = mask_dense.sum(dim=1) # [B] Number of nodes in each graph 
 
         # numerator
@@ -475,9 +479,9 @@ class BlockGT(nn.Module):
         self.norm2 = norm(out_channels)
         self.ff = nn.Sequential(
             nn.Linear(out_channels, 4*out_channels, bias=True),
-            nn.GELU(),
             nn.Dropout(dropout_ff),
-            nn.Linear(4*out_channels, out_channels),
+            nn.GELU(),
+            nn.Linear(4*out_channels, out_channels,bias=True),
             nn.Dropout(dropout_ff)
         )
 
@@ -572,6 +576,15 @@ class AEGT(nn.Module):
         x = self.block5(x, batch.batch)
 
         data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
+
+        #Reinject positional encoding in features after pooling
+        embed_pos = torch.stack([
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+        ], dim=1)
+
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+        x = x + embed_pos
 
         x_c = data.x.clone()
 
