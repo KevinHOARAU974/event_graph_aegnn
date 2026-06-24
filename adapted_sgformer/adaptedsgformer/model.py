@@ -512,6 +512,7 @@ class AEGT(nn.Module):
                  num_heads = 1,
                  pooling_size = (16,12),
                  input_shape = [120, 100],
+                 pe_aggr = "cat", #or "add"
                  max_periods = [120,100,50],
                  dropout_trans = 0.1,
                  dropout_ff = 0.1,
@@ -529,6 +530,15 @@ class AEGT(nn.Module):
         self.encoding_periods = max_periods
 
         self.in_channels = in_channels
+
+        self.pe_aggr = pe_aggr
+
+        if pe_aggr == 'cat':
+            in_channels = 2*in_channels
+        elif pe_aggr == 'add':
+            pass
+        else:
+            raise(f"Invalide aggregation type : {pe_aggr}")
 
         self.block1 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
         self.block2 = BlockGT(in_channels, in_channels, num_heads, dropout_trans=dropout_trans, dropout_ff=dropout_ff, norm_func=norm_func)
@@ -561,7 +571,11 @@ class AEGT(nn.Module):
 
         x_emb = self.x_embedding(batch.x.long()).squeeze()
 
-        x = x_emb + embed_pos
+        if self.pe_aggr == 'add':
+            x = x_emb + embed_pos
+        elif self.pe_aggr == 'cat':
+            x = torch.cat((x_emb,embed_pos), dim=1)
+
 
         x = self.block1(x, batch.batch)
         x = self.block2(x, batch.batch)
@@ -574,21 +588,27 @@ class AEGT(nn.Module):
         x = x + x_c
 
         x = self.block5(x, batch.batch)
-
-        data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
+        
+        if self.pe_aggr == 'add':
+            data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
+        elif self.pe_aggr == 'cat':
+            data = self.pool5(x[:,:self.in_channels], pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
 
         #Reinject positional encoding in features after pooling
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
-        x = x + embed_pos
+        if self.pe_aggr == 'add':
+            x = data.x + embed_pos
+        elif self.pe_aggr == 'cat':
+            x = torch.cat((data.x,embed_pos), dim=1)
 
-        x_c = data.x.clone()
+        x_c = x.clone()
 
-        x = self.block6(data.x, data.batch)
+        x = self.block6(x, data.batch)
         x = self.block7(x, data.batch)
 
         x = x + x_c
@@ -598,3 +618,8 @@ class AEGT(nn.Module):
         x = x.reshape(data.num_graphs, -1)
 
         return self.fc(x)
+    
+
+
+class DAGT(nn.Module):
+     pass

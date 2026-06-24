@@ -13,6 +13,7 @@ model_params:
     - 16
     - 12
   input_shape: [120, 100]
+  pe_aggr: 'cat'
   max_periods: [120, 100, 50]
   dropout_trans: 0.1
   dropout_ff: 0.1
