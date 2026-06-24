@@ -534,7 +534,8 @@ class AEGT(nn.Module):
         self.pe_aggr = pe_aggr
 
         if pe_aggr == 'cat':
-            in_channels = 2*in_channels
+            self.proj_1 = nn.Linear(2 * self.in_channels, self.in_channels, bias = True)
+            self.proj_2 = nn.Linear(2 * self.in_channels, self.in_channels, bias = True)
         elif pe_aggr == 'add':
             pass
         else:
@@ -555,7 +556,7 @@ class AEGT(nn.Module):
         self.fc = nn.Sequential(nn.Linear(in_channels * 16, 128, bias=True),
                                 nn.GELU(),
                                 nn.Dropout(dropout_classifier),
-                                nn.Linear(128, out_channels)
+                                nn.Linear(128, out_channels, bias = True)
         )
 
 
@@ -575,6 +576,7 @@ class AEGT(nn.Module):
             x = x_emb + embed_pos
         elif self.pe_aggr == 'cat':
             x = torch.cat((x_emb,embed_pos), dim=1)
+            x = self.proj_1(x)
 
 
         x = self.block1(x, batch.batch)
@@ -589,11 +591,8 @@ class AEGT(nn.Module):
 
         x = self.block5(x, batch.batch)
         
-        if self.pe_aggr == 'add':
-            data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
-        elif self.pe_aggr == 'cat':
-            data = self.pool5(x[:,:self.in_channels], pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
-
+        data = self.pool5(x, pos=batch.pos, batch=batch.batch, edge_index=batch.edge_index, return_data_obj=True)
+        
         #Reinject positional encoding in features after pooling
         embed_pos = torch.stack([
             embed_1D_scalar(data.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
@@ -605,6 +604,7 @@ class AEGT(nn.Module):
             x = data.x + embed_pos
         elif self.pe_aggr == 'cat':
             x = torch.cat((data.x,embed_pos), dim=1)
+            x = self.proj_2(x)
 
         x_c = x.clone()
 
