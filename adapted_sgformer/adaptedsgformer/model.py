@@ -534,8 +534,10 @@ class AEGT(nn.Module):
         self.pe_aggr = pe_aggr
 
         if pe_aggr == 'cat':
-            self.proj_1 = nn.Linear(2 * self.in_channels, self.in_channels, bias = True)
-            self.proj_2 = nn.Linear(2 * self.in_channels, self.in_channels, bias = True)
+            self.proj_1 = nn.Sequential(nn.Linear(2 * self.in_channels, self.in_channels, bias = True),
+                                        nn.Dropout(dropout_ff))
+            self.proj_2 = nn.Sequential(nn.Linear(2 * self.in_channels, self.in_channels, bias = True),
+                                        nn.Dropout(dropout_ff))
         elif pe_aggr == 'add':
             pass
         else:
