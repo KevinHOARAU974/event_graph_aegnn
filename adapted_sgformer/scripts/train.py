@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from torch_geometric.loader import DataLoader
 
-from adaptedsgformer.model import AdaptedSGFormer, AEGT
+from adaptedsgformer.model import AdaptedSGFormer, AEGT, DAGT
 from adaptedsgformer.dataset import GraphDataset
 from torchmetrics.functional import accuracy
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
@@ -178,6 +178,8 @@ def main() -> None:
     elif cfg["model"] == 'aegt':
         model = AEGT(**cfg['model_params'])
         # cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
+    elif cfg["model"] == 'dagt':
+        model = DAGT(**cfg['model_params'])
     
     num_classes = cfg['model_params']['out_channels']
 
@@ -198,11 +200,10 @@ def main() -> None:
                 {'params': model.params2}
             ],
             **cfg['optimizer'])
-    elif cfg["model"] == 'aegt':
+    elif cfg["model"] in ("aegt", "dagt"):
         optimizer = torch.optim.AdamW(model.parameters(),
             **cfg['optimizer'])
 
-    
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['max_epochs'], **cfg['scheduler'])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -331,6 +332,8 @@ def main() -> None:
         best_model = AdaptedSGFormer(**cfg['model_params'])
     elif cfg["model"] == 'aegt':
         best_model = AEGT(**cfg['model_params'])
+    elif cfg["model"] == 'dagt':
+        best_model = DAGT(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
 
@@ -354,6 +357,8 @@ def main() -> None:
         best_model = AdaptedSGFormer(**cfg['model_params'])
     elif cfg["model"] == 'aegt':
         best_model = AEGT(**cfg['model_params'])
+    elif cfg["model"] == 'dagt':
+        best_model = DAGT(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
 

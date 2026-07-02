@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_scatter
 
 import numpy as np
 
@@ -13,8 +14,10 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
 from torch_geometric.nn.norm import BatchNorm, LayerNorm
+from torch_geometric.nn.pool.avg_pool import _avg_pool_x
+from torch_geometric.nn.pool.pool import pool_pos
 
-
+from torch_cluster import grid_cluster
 
 from sgformer.large.ours import GraphConv
 from aegnn.models.layer import MaxPooling
@@ -39,6 +42,22 @@ def embed_1D_scalar(t, dim, max_period):
     if dim % 2:
         embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return embedding
+
+def consecutive_cluster(src):
+    unique, inv, counts = torch.unique(src, sorted=True, return_inverse=True, return_counts=True)
+    perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
+    perm = inv.new_empty(unique.size(0)).scatter_(0, inv, perm)
+    return unique, inv, perm, counts
+
+def compute_pooling_at_each_layer(pooling_dim_at_output, num_layers):
+    py, px = map(int, pooling_dim_at_output.split("x"))
+    pooling_base = torch.tensor([px, py])
+    poolings = []
+    for i in range(num_layers):
+        pooling = pooling_base * 2 ** (3 - i)
+        poolings.append(pooling)
+    poolings = torch.stack(poolings)
+    return poolings
 
 # Adapted self Attention layer of SGFormer
 class TransConvLayer(nn.Module):
@@ -207,6 +226,89 @@ class TransConv(nn.Module):
                 x = self.activation(x)
             layer_.append(x)
         return torch.stack(attentions, dim=0)  # [layer num, N, N]
+    
+
+class Pooling(torch.nn.Module):
+    def __init__(self, size: Union[List[float], Tensor], width, height, batch_size, aggr: str = 'max', keep_temporal_ordering=False, self_loop=False, in_channels=-1):
+        super(Pooling, self).__init__()
+        assert aggr in ['mean', 'max']
+        self.aggr = aggr
+        self.register_buffer("voxel_size", torch.cat([size, torch.Tensor([1])]), persistent=False)
+
+        # self.transform = transform
+        self.keep_temporal_ordering = keep_temporal_ordering
+        # self.dim = dim
+
+        self.register_buffer("start", torch.Tensor([0,0,0]), persistent=False)
+        self.register_buffer("end", torch.Tensor([width-1, height-1,batch_size-1]), persistent=False)
+        # self.register_buffer("wh_inv", 1/torch.Tensor([[width, height]]), persistent=False)
+
+        # self.max_num_voxels = batch_size * self.num_grid_cells
+        # self.register_buffer("sorted_cluster", torch.arange(self.max_num_voxels), persistent=False)
+
+        self.self_loop = self_loop
+
+        self.bn = None
+        if in_channels > 0:
+            self.bn = LayerNorm(in_channels)
+
+    # @property
+    # def num_grid_cells(self):
+    #     return (1/self.voxel_size+1e-3).int().prod()
+    
+    def round_to_pixel(self, pos, wh_inv):
+        torch.div(pos+1e-5, wh_inv, out=pos, rounding_mode='floor')
+        return pos * wh_inv
+
+    def forward(self, data: Data):
+        if data.x.shape[0] == 0:
+            return data
+
+        pos = torch.cat([data.pos[:,:2], data.batch.float().view(-1,1)], dim=-1)
+        cluster = grid_cluster(pos, size=self.voxel_size, start=self.start, end=self.end)
+        unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
+        edge_index = cluster[data.edge_index]
+        if self.self_loop:
+            edge_index = edge_index.unique(dim=-1)
+        else:
+            edge_index = edge_index[:, edge_index[0]!=edge_index[1]]
+            if edge_index.shape[1] > 0:
+                edge_index = edge_index.unique(dim=-1)
+
+        batch = None if data.batch is None else data.batch[perm]
+        pos = None if data.pos is None else pool_pos(cluster, data.pos)
+
+        if self.keep_temporal_ordering:
+            t_max, _ = torch_scatter.scatter_max(data.pos[:,-1], cluster, dim=0)
+            t_src, t_dst = t_max[edge_index]
+            edge_index = edge_index[:, t_dst > t_src]
+
+        if self.aggr == 'max':
+            x, argmax = torch_scatter.scatter_max(data.x, cluster, dim=0)
+        else:
+            x = _avg_pool_x(cluster, data.x)
+
+        new_data = Batch(batch=batch, x=x, edge_index=edge_index, pos=pos)
+
+        if hasattr(data, "height"):
+            new_data.height = data.height
+            new_data.width = data.width
+
+        # round x and y coordinates to the center of the voxel grid
+        # new_data.pos[:,:2] = self.round_to_pixel(new_data.pos[:,:2], wh_inv=self.wh_inv)
+
+        # if self.transform is not None:
+        #     if new_data.edge_index.numel() > 0:
+        #         new_data = self.transform(new_data)
+        #     else:
+        #         new_data.edge_attr = torch.zeros(size=(0,pos.shape[1]), dtype=pos.dtype, device=pos.device)
+
+        if self.bn is not None:
+            new_data.x = self.bn(new_data.x)
+
+        return new_data
+    
+
 
 class Max_voxel_pooling(nn.Module):
 
@@ -472,6 +574,11 @@ class BlockGT(nn.Module):
         elif norm_func == 'batch':
             norm = BatchNorm
 
+        if in_channels != out_channels:
+            self.proj = nn.Linear(in_channels, out_channels)
+        else:
+            self.proj = nn.Identity()
+
         self.norm1 = norm(in_channels) 
         self.trans = TransConvLayer(in_channels, out_channels, num_heads)
         self.dropout1 = nn.Dropout(dropout_trans)
@@ -488,7 +595,7 @@ class BlockGT(nn.Module):
 
     def forward(self, x: Tensor, batch: Tensor):
 
-        x_c = x
+        x_c = self.proj(x)
 
         x = self.norm1(x)
         x = self.trans(x, batch)
@@ -620,6 +727,200 @@ class AEGT(nn.Module):
         return self.fc(x)
     
 
+class BlockDAGT(nn.Module):
+
+    def __init__(self,
+                 in_channels=32,
+                 out_channels=32,
+                 pe_dim=12,
+                 pe_aggr='cat',
+                 voxel_size=[1,1],
+                 encoding_periods=[120, 100, 50],
+                 pooling_params = None,
+                 blockGT_params = None,
+                 ):
+        super(BlockDAGT, self).__init__()
+
+        self.pe_dim = pe_dim
+
+        self.encoding_periods = encoding_periods
+
+        self.pooling = Pooling(voxel_size,
+                               in_channels=in_channels,
+                               **pooling_params)
+        
+        self.pe_aggr = pe_aggr
+
+        if self.pe_aggr == "add":
+            assert in_channels == pe_dim
+            self.in_gt = in_channels
+        elif self.pe_aggr == "cat":
+            self.in_gt = in_channels + pe_dim
+        else:
+            raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
+
+        self.blockGT = BlockGT(
+            self.in_gt,
+            out_channels,
+            **blockGT_params
+        )
+    
+    def forward(self, batch: Batch):
+
+        data = self.pooling(batch)
+
+        factors = [1, 1, 1e8]
+        embed_pos = torch.stack([
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+        ], dim=1)
+
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+        if self.pe_aggr == "add":
+            data.x += embed_pos
+        elif self.pe_aggr == "cat":
+            data.x = torch.cat((data.x,embed_pos), dim=1)
+
+        data.x = self.blockGT(data.x, data.batch)
+
+        return data
+
+    
+
 
 class DAGT(nn.Module):
-     pass
+
+    def __init__(self, 
+                in_channels=24,
+                out_channels=2,
+                last_voxel_div ='7x5', #voxel division of the last DAGT block
+                final_size = 16, # Final size of pooling
+                pe_dim=12,
+                pe_aggr='cat',
+                width = 120,
+                height = 100,
+                batch_size = 32, 
+                pool_aggr = 'max', 
+                keep_temporal_ordering=False,
+                self_loop=False,
+                encoding_periods=[120, 100, 50],
+                num_heads = 1,
+                dropout_trans = 0.1,
+                dropout_ff = 0.1,
+                dropout_classifier = 0.1,
+                norm_func = 'layer'
+                ): 
+
+        super(DAGT, self).__init__()
+
+        self.block_gt_params={
+                    "num_heads": num_heads,
+                    "dropout_trans": dropout_trans,
+                    "dropout_ff": dropout_ff,
+                    "norm_func": norm_func,
+                }
+        
+        self.pooling_params = {
+                    "width": width,
+                    "height": height,
+                    "batch_size" : batch_size,
+                    "aggr": pool_aggr,
+                    "keep_temporal_ordering":keep_temporal_ordering,
+                    "self_loop":self_loop,
+                }
+        
+        channels_block = [32, 48, 64, 64, 64]
+
+        sensor_shape = torch.tensor([width, height])
+
+        poolings = compute_pooling_at_each_layer(last_voxel_div, 4)
+        voxel_size = sensor_shape / poolings
+        
+        self.pe_dim = pe_dim
+        self.encoding_periods = encoding_periods
+
+        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
+
+        self.pe_aggr = pe_aggr
+
+        if self.pe_aggr == 'add':
+            pass
+        elif self.pe_aggr == 'cat':
+            in_channels += pe_dim
+
+        self.blockGT0 = BlockGT(in_channels, channels_block[0], **self.block_gt_params)
+
+        self.blockDAGT1 = BlockDAGT(channels_block[0],
+                                    channels_block[1],
+                                    voxel_size=voxel_size[0],
+                                    pe_dim=pe_dim,
+                                    pe_aggr=pe_aggr,
+                                    encoding_periods=encoding_periods,
+                                    pooling_params=self.pooling_params,
+                                    blockGT_params=self.block_gt_params)
+        
+        self.blockDAGT2 = BlockDAGT(channels_block[1],
+                                    channels_block[2],
+                                    voxel_size=voxel_size[1],
+                                    pe_dim=pe_dim,
+                                    pe_aggr=pe_aggr,
+                                    encoding_periods=encoding_periods,
+                                    pooling_params=self.pooling_params,
+                                    blockGT_params=self.block_gt_params)
+        
+        self.blockDAGT3 = BlockDAGT(channels_block[2],
+                                    channels_block[3],
+                                    voxel_size=voxel_size[2],
+                                    pe_dim=pe_dim,
+                                    pe_aggr=pe_aggr,
+                                    encoding_periods=encoding_periods,
+                                    pooling_params=self.pooling_params,
+                                    blockGT_params=self.block_gt_params)
+        
+        self.blockDAGT4 = BlockDAGT(channels_block[3],
+                                    channels_block[4],
+                                    voxel_size=voxel_size[3],
+                                    pe_dim=pe_dim,
+                                    pe_aggr=pe_aggr,
+                                    encoding_periods=encoding_periods,
+                                    pooling_params=self.pooling_params,
+                                    blockGT_params=self.block_gt_params)
+        
+        self.final_pooling = Max_voxel_pooling(sensor_shape//4, size=final_size, start = [0., 0.], end=sensor_shape-1)
+        
+        self.fc = nn.Sequential(nn.Linear(channels_block[4] * final_size, 128, bias=True),
+                                nn.GELU(),
+                                nn.Dropout(dropout_classifier),
+                                nn.Linear(128, out_channels, bias = True)
+        )
+
+    
+    def forward(self, batch :Batch):
+
+        #Embedding
+        factors = [1, 1, 1e8]
+        embed_pos = torch.stack([
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+        ], dim=1)
+
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+        x_emb = self.x_embedding(batch.x.long()).squeeze()
+
+        if self.pe_aggr == 'add':
+            batch.x = x_emb + embed_pos
+        elif self.pe_aggr == 'cat':
+            batch.x = torch.cat((x_emb,embed_pos), dim=1)
+        
+        batch.x = self.blockGT0(batch.x, batch.batch)
+
+        data = self.blockDAGT1(batch)
+        data = self.blockDAGT2(data)
+        data = self.blockDAGT3(data)
+        data = self.blockDAGT4(data)
+
+        x = self.final_pooling(data.x, data. pos[:, :2], batch = data.batch)
+        
+        x = x.reshape(data.num_graphs, -1)
+
+        return self.fc(x)

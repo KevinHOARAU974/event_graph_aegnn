@@ -1,0 +1,54 @@
+seed: 12345
+project_name : &dataset "ncars"
+
+model: "dagt"
+
+task: "recognition"
+
+dataset:
+  root: "../data/"
+  name: *dataset
+
+dataloader:  
+  batch_size : &bs 16
+  num_workers: 8
+  pin_memory: True
+
+model_params:
+  in_channels: 24
+  out_channels: 2
+  last_voxel_div: '7x5'
+  final_size: 16
+  pe_dim: 12
+  pe_aggr: 'cat'
+  width: &w 120
+  height: &h 100
+  batch_size: *bs
+  pool_aggr: 'max'
+  keep_temporal_ordering: False
+  self_loop: False
+  encoding_periods: [*w, *h, 50]
+  num_heads: 1
+  dropout_trans: 0.1
+  dropout_ff: 0.1
+  dropout_classifier: 0.1
+  norm_func: 'layer'
+
+early_stopping:
+  patience: 5
+  min_delta: 1e-3
+  min_epochs: 20
+
+criterion:
+  label_smoothing : 0.1
+
+max_epochs : 1
+
+optimizer:
+  lr : 1e-4
+  weight_decay : 0.0
+
+scheduler:
+  eta_min: 0.0
+
+log_dir: "./test_asgf"
