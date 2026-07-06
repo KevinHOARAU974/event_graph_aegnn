@@ -166,6 +166,17 @@ def main() -> None:
     val_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'validation')
     test_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'test')
 
+    cfg_ds = load_config(root / cfg['dataset']['name'] / "dataset.yaml")
+
+    cfg_ds["max_time_training"] = float(cfg_ds["max_time_training"])
+    cfg_ds["max_time_validation"] = float(cfg_ds["max_time_validation"])
+    cfg_ds["max_time_test"] = float(cfg_ds["max_time_test"])
+
+    cfg_ds["factors"][2] = float(cfg_ds["factors"][2])
+
+    w = cfg_ds["width"]
+    h = cfg_ds["height"]
+
     train_dataloader = DataLoader(train_dataset, shuffle=True, **cfg['dataloader'])
     val_dataloader = DataLoader(val_dataset, shuffle=False, **cfg['dataloader'])
     test_dataloader = DataLoader(test_dataset, shuffle=False, **cfg['dataloader'])
@@ -175,10 +186,21 @@ def main() -> None:
 
     if cfg["model"] == 'adapted_sgformer':
         model = AdaptedSGFormer(**cfg['model_params'])
-    elif cfg["model"] == 'aegt':
+    elif cfg["model"] == 'aegt': 
+
+        cfg["model_params"]["max_periods"] = [w, h, cfg_ds["max_time_training"]]
+        cfg["model_params"]["input_shape"] = [w, h]
+        cfg["model_params"]["factors"] = cfg_ds["factors"]
+
         model = AEGT(**cfg['model_params'])
         # cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
     elif cfg["model"] == 'dagt':
+        
+        cfg["model_params"]["height"] = h
+        cfg["model_params"]["width"] = w
+        cfg["model_params"]["encoding_periods"] = [w, h, cfg_ds["max_time_training"]]
+        cfg["model_params"]["factors"] = cfg_ds["factors"]
+
         model = DAGT(**cfg['model_params'])
     
     num_classes = cfg['model_params']['out_channels']

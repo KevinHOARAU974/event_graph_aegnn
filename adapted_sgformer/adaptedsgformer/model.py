@@ -621,6 +621,7 @@ class AEGT(nn.Module):
                  input_shape = [120, 100],
                  pe_aggr = "cat", #or "add"
                  max_periods = [120,100,50],
+                 factors = [1, 1, 1],
                  dropout_trans = 0.1,
                  dropout_ff = 0.1,
                  dropout_classifier = 0.1,
@@ -635,6 +636,7 @@ class AEGT(nn.Module):
         self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
 
         self.encoding_periods = max_periods
+        self.factors = factors
 
         self.in_channels = in_channels
 
@@ -670,9 +672,9 @@ class AEGT(nn.Module):
     def forward(self, batch : Batch):
 
         #Embedding
-        factors = [1, 1, 1e8]
+        # factors = [1, 1, 1e8]
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
@@ -702,7 +704,7 @@ class AEGT(nn.Module):
         
         #Reinject positional encoding in features after pooling
         embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.in_channels/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
@@ -736,6 +738,7 @@ class BlockDAGT(nn.Module):
                  pe_aggr='cat',
                  voxel_size=[1,1],
                  encoding_periods=[120, 100, 50],
+                 factors = [1, 1, 1],
                  pooling_params = None,
                  blockGT_params = None,
                  ):
@@ -750,6 +753,8 @@ class BlockDAGT(nn.Module):
                                **pooling_params)
         
         self.pe_aggr = pe_aggr
+
+        self.factors = factors
 
         if self.pe_aggr == "add":
             assert in_channels == pe_dim
@@ -769,9 +774,9 @@ class BlockDAGT(nn.Module):
 
         data = self.pooling(batch)
 
-        factors = [1, 1, 1e8]
+        # factors = [1, 1, 1e8]
         embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
@@ -804,6 +809,7 @@ class DAGT(nn.Module):
                 keep_temporal_ordering=False,
                 self_loop=False,
                 encoding_periods=[120, 100, 50],
+                factors = [1,1,1],
                 num_heads = 1,
                 dropout_trans = 0.1,
                 dropout_ff = 0.1,
@@ -856,6 +862,7 @@ class DAGT(nn.Module):
                                     pe_dim=pe_dim,
                                     pe_aggr=pe_aggr,
                                     encoding_periods=encoding_periods,
+                                    factors= factors,
                                     pooling_params=self.pooling_params,
                                     blockGT_params=self.block_gt_params)
         
@@ -865,6 +872,7 @@ class DAGT(nn.Module):
                                     pe_dim=pe_dim,
                                     pe_aggr=pe_aggr,
                                     encoding_periods=encoding_periods,
+                                    factors= factors,
                                     pooling_params=self.pooling_params,
                                     blockGT_params=self.block_gt_params)
         
@@ -874,6 +882,7 @@ class DAGT(nn.Module):
                                     pe_dim=pe_dim,
                                     pe_aggr=pe_aggr,
                                     encoding_periods=encoding_periods,
+                                    factors= factors,
                                     pooling_params=self.pooling_params,
                                     blockGT_params=self.block_gt_params)
         
@@ -883,6 +892,7 @@ class DAGT(nn.Module):
                                     pe_dim=pe_dim,
                                     pe_aggr=pe_aggr,
                                     encoding_periods=encoding_periods,
+                                    factors= factors,
                                     pooling_params=self.pooling_params,
                                     blockGT_params=self.block_gt_params)
         

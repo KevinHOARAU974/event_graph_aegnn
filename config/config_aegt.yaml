@@ -7,14 +7,14 @@ task: "recognition"
 
 model_params:
   in_channels: 36
-  out_channels: 2
+  out_channels: 100
   num_heads: 1
   pooling_size: 
     - 16
     - 12
-  input_shape: [120, 100]
+  # input_shape: [120, 100]
   pe_aggr: 'cat'
-  max_periods: [120, 100, 50]
+  # max_periods: [120, 100, 50]
   dropout_trans: 0.1
   dropout_ff: 0.1
   dropout_classifier: 0.1
@@ -28,10 +28,10 @@ early_stopping:
 
 dataset:
   root: "../data/"
-  name: "ncars"
+  name: "ncaltech101"
 
 dataloader:  
-  batch_size : 16
+  batch_size : 1
   num_workers: 8
   pin_memory: True
 

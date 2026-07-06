@@ -1,5 +1,5 @@
 seed: 12345
-project_name : &dataset "ncars"
+project_name : &dataset "ncaltech101"
 
 model: "dagt"
 
@@ -16,18 +16,18 @@ dataloader:
 
 model_params:
   in_channels: 24
-  out_channels: 2
+  out_channels: 100
   last_voxel_div: '7x5'
   final_size: 16
   pe_dim: 12
   pe_aggr: 'cat'
-  width: &w 120
-  height: &h 100
+  # width: &w 120
+  # height: &h 100
   batch_size: *bs
   pool_aggr: 'max'
   keep_temporal_ordering: False
   self_loop: False
-  encoding_periods: [*w, *h, 50]
+  # encoding_periods: [*w, *h, 50]
   num_heads: 1
   dropout_trans: 0.1
   dropout_ff: 0.1
