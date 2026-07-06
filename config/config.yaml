@@ -1,8 +1,8 @@
 seed: 12345
-project_name: 'aegnn'
+project_name: &dataset "ncaltech101"
 
 model: "graph_res"
-dataset: "ncaltech101"
+dataset: *dataset
 task: "recognition"
 
 data_params: 
@@ -16,7 +16,7 @@ model_params:
   weight_decay: 0.00005
   eta_min: 0.0
   dim: 3
-  scheduler_type: "step"
+  scheduler_type: "cosine"
 
 
 
