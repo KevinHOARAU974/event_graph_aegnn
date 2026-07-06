@@ -10,7 +10,7 @@ class GraphDataset(Dataset):
     def __init__(self, root):
         super().__init__(root)
 
-        self.files = [p for p in Path(root).rglob("*") if p.is_file()]
+        self.files = [p for p in Path(root).rglob("*") if p.is_file() and not p.name.startswith(".")]
 
     def len(self):
         return len(self.files)
