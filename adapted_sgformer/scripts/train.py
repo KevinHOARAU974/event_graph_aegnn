@@ -7,6 +7,7 @@ import yaml
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 from aegnn.utils.git import get_git_info
 
@@ -137,7 +138,7 @@ def test_model(model, test_loader, criterion, num_classes = 2, device='cuda'):
 
     # plt.tight_layout()
     # plt.savefig(f"{checkpoint_path}/confusion_matrix.png", dpi=300)
-    # plt.close()
+    # plte.close()
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
@@ -157,7 +158,14 @@ def main() -> None:
 
     print(cfg)
 
-    torch.manual_seed(cfg['seed'])
+    seed = cfg['seed']
+
+    random.seed(seed)
+    np.random.seed(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
     ### Datasets and Dataloader
     root = Path(os.path.expanduser(cfg['dataset']['root'])) 
@@ -258,15 +266,15 @@ def main() -> None:
 
     patience = cfg['early_stopping']["patience"]
     min_delta = float(cfg['early_stopping']["min_delta"])
-    min_epochs = float(cfg['early_stopping']["min_epochs"])
+    min_epochs = int(cfg['early_stopping']["min_epochs"])
 
     epochs_without_improvement = 0
+    
+    model.to(device)
 
     print("Start training")
 
     for epoch in tqdm(range(cfg['max_epochs'])):
-
-        model.to(device)
 
         train_loss, train_acc = train_one_epoch(
             model,

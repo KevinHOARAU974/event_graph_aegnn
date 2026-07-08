@@ -1,386 +1,16 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch_scatter
-
-import numpy as np
 
 from torch_geometric.data import Batch
-from torch_geometric.utils import to_dense_batch
 from torch_geometric.nn import global_mean_pool, global_max_pool
-from typing import List, Optional, Tuple, Union, List
-
-from torch import Tensor
-from torch_geometric.data import Data
-from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
-from torch_geometric.nn.norm import BatchNorm, LayerNorm
-from torch_geometric.nn.pool.avg_pool import _avg_pool_x
-from torch_geometric.nn.pool.pool import pool_pos
-
-from torch_cluster import grid_cluster
 
 from sgformer.large.ours import GraphConv
 from aegnn.models.layer import MaxPooling
 
-
-def embed_1D_scalar(t, dim, max_period):
-    """
-    Create sinusoidal timestep embeddings.
-    :param t: a 1-D Tensor of N indices, one per batch element.
-                        These may be fractional.
-    :param dim: the dimension of the output.
-    :param max_period: controls the minimum frequency of the embeddings.
-    :return: an (N, D) Tensor of positional embeddings.
-    """
-    # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
-    half = dim // 2
-    freqs = torch.exp(
-        -np.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-    ).to(device=t.device)
-    args = t[:, None].float() * freqs[None]
-    embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-    if dim % 2:
-        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
-    return embedding
-
-def consecutive_cluster(src):
-    unique, inv, counts = torch.unique(src, sorted=True, return_inverse=True, return_counts=True)
-    perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
-    perm = inv.new_empty(unique.size(0)).scatter_(0, inv, perm)
-    return unique, inv, perm, counts
-
-def compute_pooling_at_each_layer(pooling_dim_at_output, num_layers):
-    py, px = map(int, pooling_dim_at_output.split("x"))
-    pooling_base = torch.tensor([px, py])
-    poolings = []
-    for i in range(num_layers):
-        pooling = pooling_base * 2 ** (3 - i)
-        poolings.append(pooling)
-    poolings = torch.stack(poolings)
-    return poolings
-
-# Adapted self Attention layer of SGFormer
-class TransConvLayer(nn.Module):
-    '''
-    transformer with fast attention
-    '''
-
-    def __init__(self, in_channels,
-                 out_channels,
-                 num_heads,
-                 use_weight=True):
-        super().__init__()
-        self.Wk = nn.Linear(in_channels, out_channels * num_heads)
-        self.Wq = nn.Linear(in_channels, out_channels * num_heads)
-        if use_weight:
-            self.Wv = nn.Linear(in_channels, out_channels * num_heads)
-
-        self.out_channels = out_channels
-        self.num_heads = num_heads
-        self.use_weight = use_weight
-
-    def reset_parameters(self):
-        self.Wk.reset_parameters()
-        self.Wq.reset_parameters()
-        if self.use_weight:
-            self.Wv.reset_parameters()
-
-    def forward(self, input : Tensor, batch : Tensor, output_attn=False):
-        # feature transformation
-
-        #B : Batch size
-        #Nmax : number of nodes of the largest graph in the batch
-        #H : Number of Heads
-        #I : Input size
-        #M : Output size
-
-        # Groupe by graph in order to have global attention by graph in batch
-        x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
-        
-        batch_size = len(batch.unique())
-
-        qs = self.Wq(x).reshape(batch_size, -1, self.num_heads, self.out_channels) 
-        ks = self.Wk(x).reshape(batch_size, -1, self.num_heads, self.out_channels)
-
-        if self.use_weight:
-            vs = self.Wv(x).reshape(batch_size, -1, self.num_heads, self.out_channels)
-        else:
-            vs = x.reshape(batch_size, -1, 1, self.out_channels)
-
-        #Set to zeros padding elements in order that they not contribute to attention
-        qs[~mask_dense] = 0.0 
-        ks[~mask_dense] = 0.0
-        vs[~mask_dense] = 0.0
-
-        # normalize input
-        # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M]
-        # ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M]
-
-        qs = F.normalize(qs, p=2, dim=-1, eps=1e-6)
-        ks = F.normalize(ks, p=2, dim=-1, eps=1e-6)
-
-        N = mask_dense.sum(dim=1) # [B] Number of nodes in each graph 
-
-        # numerator
-        kvs = torch.einsum("blhm,blhd->bhmd", ks, vs)
-        attention_num = torch.einsum("bnhm,bhmd->bnhd", qs, kvs)  # [B, Nmax, H, D]
-        attention_num += N.view(batch_size, 1, 1, 1) * vs
-
-        # denominator
-        all_ones = torch.ones([ks.shape[1]]).to(ks.device)
-        ks_sum = torch.einsum("blhm,l->bhm", ks, all_ones)
-        attention_normalizer = torch.einsum("bnhm,bhm->bnh", qs, ks_sum)  # [B, Nmax, H]
-
-        # attentive aggregated results
-        attention_normalizer = torch.unsqueeze(
-            attention_normalizer, len(attention_normalizer.shape))  # [B, Nmax, H, 1]
-        attention_normalizer += torch.ones_like(attention_normalizer) * N.view(batch_size, 1, 1, 1)
-        attn_output = attention_num / attention_normalizer  # [B,Nmax, H, D]
-
-        # compute attention for visualization if needed
-        if output_attn:
-            attention = torch.einsum("bnhm,blhm->bnlh", qs, ks).mean(dim=-1)  # [Nmax, Nmax]
-            normalizer = attention_normalizer.squeeze(dim=-1).mean(dim=-1, keepdims=True)  # [Nmax,1]
-            attention = attention / normalizer
-        
-        attn_output = attn_output[mask_dense]
-
-        final_output = attn_output.mean(dim=1)
-
-        if output_attn:
-            return final_output, attention
-        else:
-            return final_output
-
-class TransConv(nn.Module):
-    def __init__(self, in_channels, hidden_channels, num_layers=2, num_heads=1,
-                 dropout=0.5, use_bn=True, use_residual=True, use_weight=True, use_act=True):
-        super().__init__()
-
-        self.convs = nn.ModuleList()
-        self.fcs = nn.ModuleList()
-        self.fcs.append(nn.Linear(in_channels, hidden_channels))
-        self.bns = nn.ModuleList()
-        self.bns.append(nn.LayerNorm(hidden_channels))
-        for i in range(num_layers):
-            self.convs.append(
-                TransConvLayer(hidden_channels, hidden_channels, num_heads=num_heads, use_weight=use_weight))
-            self.bns.append(nn.LayerNorm(hidden_channels))
-
-        self.dropout = dropout
-        self.activation = F.relu
-        self.use_bn = use_bn
-        self.use_residual = use_residual
-        self.use_act = use_act
-
-    def reset_parameters(self):
-        for conv in self.convs:
-            conv.reset_parameters()
-        for bn in self.bns:
-            bn.reset_parameters()
-        for fc in self.fcs:
-            fc.reset_parameters()
-
-    def forward(self, batch : Batch):
-        layer_ = []
-
-        # input MLP layer
-        x = self.fcs[0](batch.x)
-        if self.use_bn:
-            x = self.bns[0](x)
-        x = self.activation(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        # store as residual link
-        layer_.append(x)
-
-        for i, conv in enumerate(self.convs):
-            # graph convolution with full attention aggregation
-            x = conv(x, batch.batch)
-            if self.use_residual:
-                x = (x + layer_[i]) / 2.
-            if self.use_bn:
-                x = self.bns[i + 1](x)
-            if self.use_act:
-                x = self.activation(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            layer_.append(x)
-
-        return x
-
-    def get_attentions(self, x):
-        layer_, attentions = [], []
-        x = self.fcs[0](x)
-        if self.use_bn:
-            x = self.bns[0](x)
-        x = self.activation(x)
-        layer_.append(x)
-        for i, conv in enumerate(self.convs):
-            x, attn = conv(x, x, output_attn=True)
-            attentions.append(attn)
-            if self.use_residual:
-                x = (x + layer_[i]) / 2.
-            if self.use_bn:
-                x = self.bns[i + 1](x)
-            if self.use_act:
-                x = self.activation(x)
-            layer_.append(x)
-        return torch.stack(attentions, dim=0)  # [layer num, N, N]
-    
-
-class Pooling(torch.nn.Module):
-    def __init__(self, size: Union[List[float], Tensor], width, height, batch_size, aggr: str = 'max', keep_temporal_ordering=False, self_loop=False, in_channels=-1):
-        super(Pooling, self).__init__()
-        assert aggr in ['mean', 'max']
-        self.aggr = aggr
-        self.register_buffer("voxel_size", torch.cat([size, torch.Tensor([1])]), persistent=False)
-
-        # self.transform = transform
-        self.keep_temporal_ordering = keep_temporal_ordering
-        # self.dim = dim
-
-        self.register_buffer("start", torch.Tensor([0,0,0]), persistent=False)
-        self.register_buffer("end", torch.Tensor([width-1, height-1,batch_size-1]), persistent=False)
-        # self.register_buffer("wh_inv", 1/torch.Tensor([[width, height]]), persistent=False)
-
-        # self.max_num_voxels = batch_size * self.num_grid_cells
-        # self.register_buffer("sorted_cluster", torch.arange(self.max_num_voxels), persistent=False)
-
-        self.self_loop = self_loop
-
-        self.bn = None
-        if in_channels > 0:
-            self.bn = LayerNorm(in_channels)
-
-    # @property
-    # def num_grid_cells(self):
-    #     return (1/self.voxel_size+1e-3).int().prod()
-    
-    def round_to_pixel(self, pos, wh_inv):
-        torch.div(pos+1e-5, wh_inv, out=pos, rounding_mode='floor')
-        return pos * wh_inv
-
-    def forward(self, data: Data):
-        if data.x.shape[0] == 0:
-            return data
-
-        pos = torch.cat([data.pos[:,:2], data.batch.float().view(-1,1)], dim=-1)
-        cluster = grid_cluster(pos, size=self.voxel_size, start=self.start, end=self.end)
-        unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
-        edge_index = cluster[data.edge_index]
-        if self.self_loop:
-            edge_index = edge_index.unique(dim=-1)
-        else:
-            edge_index = edge_index[:, edge_index[0]!=edge_index[1]]
-            if edge_index.shape[1] > 0:
-                edge_index = edge_index.unique(dim=-1)
-
-        batch = None if data.batch is None else data.batch[perm]
-        pos = None if data.pos is None else pool_pos(cluster, data.pos)
-
-        if self.keep_temporal_ordering:
-            t_max, _ = torch_scatter.scatter_max(data.pos[:,-1], cluster, dim=0)
-            t_src, t_dst = t_max[edge_index]
-            edge_index = edge_index[:, t_dst > t_src]
-
-        if self.aggr == 'max':
-            x, argmax = torch_scatter.scatter_max(data.x, cluster, dim=0)
-        else:
-            x = _avg_pool_x(cluster, data.x)
-
-        new_data = Batch(batch=batch, x=x, edge_index=edge_index, pos=pos)
-
-        if hasattr(data, "height"):
-            new_data.height = data.height
-            new_data.width = data.width
-
-        # round x and y coordinates to the center of the voxel grid
-        # new_data.pos[:,:2] = self.round_to_pixel(new_data.pos[:,:2], wh_inv=self.wh_inv)
-
-        # if self.transform is not None:
-        #     if new_data.edge_index.numel() > 0:
-        #         new_data = self.transform(new_data)
-        #     else:
-        #         new_data.edge_attr = torch.zeros(size=(0,pos.shape[1]), dtype=pos.dtype, device=pos.device)
-
-        if self.bn is not None:
-            new_data.x = self.bn(new_data.x)
-
-        return new_data
-    
-
-
-class Max_voxel_pooling(nn.Module):
-
-    def __init__(self, voxel_size: List[int], size: int, start: Optional[Union[float, List[float], Tensor]] = None, end: Optional[Union[float, List[float], Tensor]] = None):
-
-        super(Max_voxel_pooling, self).__init__()
-        self.voxel_size = voxel_size
-        self.size = size
-        self.start = start
-        self.end = end
-
-    def forward(self, x: torch.Tensor, pos: torch.Tensor, batch: Optional[torch.Tensor] = None
-                ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.LongTensor, torch.Tensor, torch.Tensor], Data]:
-        
-        pos = pos.float()
-
-        if batch is not None:
-            batch = batch.long()
-
-        if torch.is_tensor(self.voxel_size):
-            self.voxel_size = self.voxel_size.to(device=pos.device, dtype=pos.dtype)
-        
-        if torch.is_tensor(self.start):
-            self.start = self.start.to(device=pos.device, dtype=pos.dtype)
-
-        if torch.is_tensor(self.end):
-            self.end = self.end.to(device=pos.device, dtype=pos.dtype)
-        
-        # print(f"device end: {self.end}")
-        cluster = voxel_grid(pos, batch=batch, size=self.voxel_size, start=self.start, end=self.end)
-
-        x, _ = max_pool_x(cluster, x, batch, size=self.size)
-        return x
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(voxel_size={self.voxel_size}, size={self.size})"
-    
-class Avg_voxel_pooling(nn.Module):
-
-    def __init__(self, voxel_size: List[int], size: int, start: Optional[Union[float, List[float], Tensor]] = None, end: Optional[Union[float, List[float], Tensor]] = None):
-
-        super(Avg_voxel_pooling, self).__init__()
-        self.voxel_size = voxel_size
-        self.size = size
-        self.start = start
-        self.end = end
-
-    def forward(self, x: torch.Tensor, pos: torch.Tensor, batch: Optional[torch.Tensor] = None
-                ) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.LongTensor, torch.Tensor, torch.Tensor], Data]:
-        
-        pos = pos.float()
-
-        if batch is not None:
-            batch = batch.long()
-
-        if torch.is_tensor(self.voxel_size):
-            self.voxel_size = self.voxel_size.to(device=pos.device, dtype=pos.dtype)
-        
-        if torch.is_tensor(self.start):
-            self.start = self.start.to(device=pos.device, dtype=pos.dtype)
-
-        if torch.is_tensor(self.end):
-            self.end = self.end.to(device=pos.device, dtype=pos.dtype)
-        
-        # print(f"device end: {self.end}")
-        cluster = voxel_grid(pos, batch=batch, size=self.voxel_size, start=self.start, end=self.end)
-
-        x, _ = avg_pool_x(cluster, x, batch, size=self.size)
-        return x
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(voxel_size={self.voxel_size}, size={self.size})"
+from adaptedsgformer.layers.pooling import Max_voxel_pooling, Avg_voxel_pooling
+from adaptedsgformer.layers.trans import TransConv
+from adaptedsgformer.utils import compute_pooling_at_each_layer, embed_1D_scalar
+from adaptedsgformer.layers.block import BlockDAGT, BlockGT
 
 class AdaptedSGFormer(nn.Module):
     def __init__(self, in_channels,
@@ -557,61 +187,6 @@ class AdaptedSGFormer(nn.Module):
         if self.use_graph:
             self.graph_conv.reset_parameters()
 
-
-class BlockGT(nn.Module):
-
-    def __init__(self, in_channels,
-                 out_channels,
-                 num_heads,
-                 dropout_trans = 0.1,
-                 dropout_ff = 0.1,
-                 norm_func = 'layer',
-                 ):
-        super(BlockGT, self).__init__()
-
-        if norm_func == 'layer':
-            norm = LayerNorm
-        elif norm_func == 'batch':
-            norm = BatchNorm
-
-        if in_channels != out_channels:
-            self.proj = nn.Linear(in_channels, out_channels)
-        else:
-            self.proj = nn.Identity()
-
-        self.norm1 = norm(in_channels) 
-        self.trans = TransConvLayer(in_channels, out_channels, num_heads)
-        self.dropout1 = nn.Dropout(dropout_trans)
-
-        self.norm2 = norm(out_channels)
-        self.ff = nn.Sequential(
-            nn.Linear(out_channels, 4*out_channels, bias=True),
-            nn.Dropout(dropout_ff),
-            nn.GELU(),
-            nn.Linear(4*out_channels, out_channels,bias=True),
-            nn.Dropout(dropout_ff)
-        )
-
-
-    def forward(self, x: Tensor, batch: Tensor):
-
-        x_c = self.proj(x)
-
-        x = self.norm1(x)
-        x = self.trans(x, batch)
-        x = self.dropout1(x)
-
-        x = x + x_c
-        
-        x_c = x 
-
-        x = self.norm2(x)
-        x = self.ff(x)
-
-        x = x + x_c
-
-        return x
-
 class AEGT(nn.Module):
 
     def __init__(self,in_channels = 36,
@@ -729,70 +304,6 @@ class AEGT(nn.Module):
         return self.fc(x)
     
 
-class BlockDAGT(nn.Module):
-
-    def __init__(self,
-                 in_channels=32,
-                 out_channels=32,
-                 pe_dim=12,
-                 pe_aggr='cat',
-                 voxel_size=[1,1],
-                 encoding_periods=[120, 100, 50],
-                 factors = [1, 1, 1],
-                 pooling_params = None,
-                 blockGT_params = None,
-                 ):
-        super(BlockDAGT, self).__init__()
-
-        self.pe_dim = pe_dim
-
-        self.encoding_periods = encoding_periods
-
-        self.pooling = Pooling(voxel_size,
-                               in_channels=in_channels,
-                               **pooling_params)
-        
-        self.pe_aggr = pe_aggr
-
-        self.factors = factors
-
-        if self.pe_aggr == "add":
-            assert in_channels == pe_dim
-            self.in_gt = in_channels
-        elif self.pe_aggr == "cat":
-            self.in_gt = in_channels + pe_dim
-        else:
-            raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
-
-        self.blockGT = BlockGT(
-            self.in_gt,
-            out_channels,
-            **blockGT_params
-        )
-    
-    def forward(self, batch: Batch):
-
-        data = self.pooling(batch)
-
-        # factors = [1, 1, 1e8]
-        embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
-        ], dim=1)
-
-        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
-
-        if self.pe_aggr == "add":
-            data.x += embed_pos
-        elif self.pe_aggr == "cat":
-            data.x = torch.cat((data.x,embed_pos), dim=1)
-
-        data.x = self.blockGT(data.x, data.batch)
-
-        return data
-
-    
-
-
 class DAGT(nn.Module):
 
     def __init__(self, 
@@ -818,6 +329,8 @@ class DAGT(nn.Module):
                 ): 
 
         super(DAGT, self).__init__()
+
+        assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
 
         self.block_gt_params={
                     "num_heads": num_heads,
@@ -848,6 +361,8 @@ class DAGT(nn.Module):
         self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
 
         self.pe_aggr = pe_aggr
+
+        self.final_size = final_size
 
         if self.pe_aggr == 'add':
             pass
@@ -908,14 +423,13 @@ class DAGT(nn.Module):
     def forward(self, batch :Batch):
 
         #Embedding
-        factors = [1, 1, 1e8]
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.pe_dim/3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), factors, self.encoding_periods)
+            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
-        x_emb = self.x_embedding(batch.x.long()).squeeze()
+        x_emb = self.x_embedding(batch.x.long()).squeeze(1)
 
         if self.pe_aggr == 'add':
             batch.x = x_emb + embed_pos
@@ -929,7 +443,9 @@ class DAGT(nn.Module):
         data = self.blockDAGT3(data)
         data = self.blockDAGT4(data)
 
-        x = self.final_pooling(data.x, data. pos[:, :2], batch = data.batch)
+        x = self.final_pooling(data.x, data.pos[:, :2], batch = data.batch)
+
+        assert x.size(0) == data.num_graphs * self.final_size
         
         x = x.reshape(data.num_graphs, -1)
 
