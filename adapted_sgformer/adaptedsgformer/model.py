@@ -303,19 +303,19 @@ class AEGT(nn.Module):
 
         return self.fc(x)
     
-
 class DAGT(nn.Module):
 
     def __init__(self, 
                 in_channels=24,
                 out_channels=2,
+                num_blocks=4,
+                hidden_channels_list=[32, 48, 64, 64, 64],
                 last_voxel_div ='7x5', #voxel division of the last DAGT block
                 final_size = 16, # Final size of pooling
                 pe_dim=12,
                 pe_aggr='cat',
                 width = 120,
                 height = 100,
-                batch_size = 32, 
                 pool_aggr = 'max', 
                 keep_temporal_ordering=False,
                 self_loop=False,
@@ -331,6 +331,7 @@ class DAGT(nn.Module):
         super(DAGT, self).__init__()
 
         assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
+        assert len(hidden_channels_list) == num_blocks+1, f'Length of hidden_channels must be num_blocks+1'
 
         self.block_gt_params={
                     "num_heads": num_heads,
@@ -342,21 +343,19 @@ class DAGT(nn.Module):
         self.pooling_params = {
                     "width": width,
                     "height": height,
-                    "batch_size" : batch_size,
                     "aggr": pool_aggr,
                     "keep_temporal_ordering":keep_temporal_ordering,
                     "self_loop":self_loop,
                 }
-        
-        channels_block = [32, 48, 64, 64, 64]
 
         sensor_shape = torch.tensor([width, height])
 
-        poolings = compute_pooling_at_each_layer(last_voxel_div, 4)
+        poolings = compute_pooling_at_each_layer(last_voxel_div, num_layers=num_blocks)
         voxel_size = sensor_shape / poolings
         
         self.pe_dim = pe_dim
         self.encoding_periods = encoding_periods
+        self.factors = factors
 
         self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
 
@@ -369,51 +368,67 @@ class DAGT(nn.Module):
         elif self.pe_aggr == 'cat':
             in_channels += pe_dim
 
-        self.blockGT0 = BlockGT(in_channels, channels_block[0], **self.block_gt_params)
+        self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
 
-        self.blockDAGT1 = BlockDAGT(channels_block[0],
-                                    channels_block[1],
-                                    voxel_size=voxel_size[0],
-                                    pe_dim=pe_dim,
-                                    pe_aggr=pe_aggr,
-                                    encoding_periods=encoding_periods,
-                                    factors= factors,
-                                    pooling_params=self.pooling_params,
-                                    blockGT_params=self.block_gt_params)
+        self.num_blocks = num_blocks
+        self.block_dagt = nn.ModuleList()
+
+        for i in range(self.num_blocks):
+
+            self.block_dagt.append(BlockDAGT(hidden_channels_list[i],
+                                            hidden_channels_list[i+1],
+                                            voxel_size=voxel_size[i],
+                                            pe_dim=pe_dim,
+                                            pe_aggr=pe_aggr,
+                                            encoding_periods=encoding_periods,
+                                            factors= factors,
+                                            pooling_params=self.pooling_params,
+                                            blockGT_params=self.block_gt_params)
+            )
+
+        # self.blockDAGT1 = BlockDAGT(channels_block[0],
+        #                             channels_block[1],
+        #                             voxel_size=voxel_size[0],
+        #                             pe_dim=pe_dim,
+        #                             pe_aggr=pe_aggr,
+        #                             encoding_periods=encoding_periods,
+        #                             factors= factors,
+        #                             pooling_params=self.pooling_params,
+        #                             blockGT_params=self.block_gt_params)
         
-        self.blockDAGT2 = BlockDAGT(channels_block[1],
-                                    channels_block[2],
-                                    voxel_size=voxel_size[1],
-                                    pe_dim=pe_dim,
-                                    pe_aggr=pe_aggr,
-                                    encoding_periods=encoding_periods,
-                                    factors= factors,
-                                    pooling_params=self.pooling_params,
-                                    blockGT_params=self.block_gt_params)
+        # self.blockDAGT2 = BlockDAGT(channels_block[1],
+        #                             channels_block[2],
+        #                             voxel_size=voxel_size[1],
+        #                             pe_dim=pe_dim,
+        #                             pe_aggr=pe_aggr,
+        #                             encoding_periods=encoding_periods,
+        #                             factors= factors,
+        #                             pooling_params=self.pooling_params,
+        #                             blockGT_params=self.block_gt_params)
         
-        self.blockDAGT3 = BlockDAGT(channels_block[2],
-                                    channels_block[3],
-                                    voxel_size=voxel_size[2],
-                                    pe_dim=pe_dim,
-                                    pe_aggr=pe_aggr,
-                                    encoding_periods=encoding_periods,
-                                    factors= factors,
-                                    pooling_params=self.pooling_params,
-                                    blockGT_params=self.block_gt_params)
+        # self.blockDAGT3 = BlockDAGT(channels_block[2],
+        #                             channels_block[3],
+        #                             voxel_size=voxel_size[2],
+        #                             pe_dim=pe_dim,
+        #                             pe_aggr=pe_aggr,
+        #                             encoding_periods=encoding_periods,
+        #                             factors= factors,
+        #                             pooling_params=self.pooling_params,
+        #                             blockGT_params=self.block_gt_params)
         
-        self.blockDAGT4 = BlockDAGT(channels_block[3],
-                                    channels_block[4],
-                                    voxel_size=voxel_size[3],
-                                    pe_dim=pe_dim,
-                                    pe_aggr=pe_aggr,
-                                    encoding_periods=encoding_periods,
-                                    factors= factors,
-                                    pooling_params=self.pooling_params,
-                                    blockGT_params=self.block_gt_params)
+        # self.blockDAGT4 = BlockDAGT(channels_block[3],
+        #                             channels_block[4],
+        #                             voxel_size=voxel_size[3],
+        #                             pe_dim=pe_dim,
+        #                             pe_aggr=pe_aggr,
+        #                             encoding_periods=encoding_periods,
+        #                             factors= factors,
+        #                             pooling_params=self.pooling_params,
+        #                             blockGT_params=self.block_gt_params)
         
         self.final_pooling = Max_voxel_pooling(sensor_shape//4, size=final_size, start = [0., 0.], end=sensor_shape-1)
         
-        self.fc = nn.Sequential(nn.Linear(channels_block[4] * final_size, 128, bias=True),
+        self.fc = nn.Sequential(nn.Linear(hidden_channels_list[-1] * final_size, 128, bias=True),
                                 nn.GELU(),
                                 nn.Dropout(dropout_classifier),
                                 nn.Linear(128, out_channels, bias = True)
@@ -422,26 +437,33 @@ class DAGT(nn.Module):
     
     def forward(self, batch :Batch):
 
+        device = next(self.parameters()).device
+        data = batch.clone().to(device)
+        # data = batch.clone()
         #Embedding
+
         embed_pos = torch.stack([
-            embed_1D_scalar(batch.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
-        x_emb = self.x_embedding(batch.x.long()).squeeze(1)
+        x_emb = self.x_embedding(data.x.long()).squeeze(1)
 
         if self.pe_aggr == 'add':
-            batch.x = x_emb + embed_pos
+            data.x = x_emb + embed_pos
         elif self.pe_aggr == 'cat':
-            batch.x = torch.cat((x_emb,embed_pos), dim=1)
+            data.x = torch.cat((x_emb,embed_pos), dim=1)
         
-        batch.x = self.blockGT0(batch.x, batch.batch)
+        data.x = self.blockGT0(data.x, data.batch)
 
-        data = self.blockDAGT1(batch)
-        data = self.blockDAGT2(data)
-        data = self.blockDAGT3(data)
-        data = self.blockDAGT4(data)
+        for i in range(self.num_blocks):
+            data = self.block_dagt[i](data)
+
+        # data = self.blockDAGT1(batch)
+        # data = self.blockDAGT2(data)
+        # data = self.blockDAGT3(data)
+        # data = self.blockDAGT4(data)
 
         x = self.final_pooling(data.x, data.pos[:, :2], batch = data.batch)
 

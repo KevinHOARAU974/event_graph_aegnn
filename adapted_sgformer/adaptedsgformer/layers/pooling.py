@@ -17,18 +17,21 @@ from torch_cluster import grid_cluster
 from adaptedsgformer.utils import consecutive_cluster
 
 class Pooling(torch.nn.Module):
-    def __init__(self, size: Union[List[float], Tensor], width, height, batch_size, aggr: str = 'max', keep_temporal_ordering=False, self_loop=False, in_channels=-1):
+    def __init__(self, size: Union[List[float], Tensor], width, height, aggr: str = 'max', keep_temporal_ordering=False, self_loop=False, in_channels=-1):
         super(Pooling, self).__init__()
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
         assert aggr in ['mean', 'max']
         self.aggr = aggr
-        self.register_buffer("voxel_size", torch.cat([size, torch.Tensor([1])]), persistent=False)
+        self.register_buffer("voxel_size", size.to(self.device), persistent=False)
 
         # self.transform = transform
         self.keep_temporal_ordering = keep_temporal_ordering
         # self.dim = dim
 
-        self.register_buffer("start", torch.Tensor([0,0,0]), persistent=False)
-        self.register_buffer("end", torch.Tensor([width-1, height-1,batch_size-1]), persistent=False)
+        self.register_buffer("start", torch.Tensor([0,0,0]).to(self.device), persistent=False)
+        self.register_buffer("end", torch.Tensor([width-1, height-1]).to(self.device), persistent=False)
         # self.register_buffer("wh_inv", 1/torch.Tensor([[width, height]]), persistent=False)
 
         # self.max_num_voxels = batch_size * self.num_grid_cells
@@ -49,12 +52,14 @@ class Pooling(torch.nn.Module):
         return pos * wh_inv
 
     def forward(self, data: Data):
+
+
         if data.x.shape[0] == 0:
             return data
 
-        pos = torch.cat([data.pos[:,:2], data.batch.float().view(-1,1)], dim=-1)
-        cluster = grid_cluster(pos, size=self.voxel_size, start=self.start, end=self.end)
-        unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
+        pos = data.pos[:,:2]
+        cluster = voxel_grid(pos, batch=data.batch, size=self.voxel_size, start=self.start, end=self.end)
+        _, cluster, perm, _ = consecutive_cluster(cluster)
         edge_index = cluster[data.edge_index]
         if self.self_loop:
             edge_index = edge_index.unique(dim=-1)
@@ -72,7 +77,7 @@ class Pooling(torch.nn.Module):
             edge_index = edge_index[:, t_dst > t_src]
 
         if self.aggr == 'max':
-            x, argmax = torch_scatter.scatter_max(data.x, cluster, dim=0)
+            x, _ = torch_scatter.scatter_max(data.x, cluster, dim=0)
         else:
             x = _avg_pool_x(cluster, data.x)
 

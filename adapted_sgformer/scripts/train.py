@@ -16,6 +16,8 @@ from tqdm import tqdm
 
 from torch_geometric.loader import DataLoader
 
+from timm.utils import ModelEmaV3
+
 from adaptedsgformer.model import AdaptedSGFormer, AEGT, DAGT
 from adaptedsgformer.dataset import GraphDataset
 from torchmetrics.functional import accuracy
@@ -26,9 +28,7 @@ def load_config(config_path: str) -> dict:
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
     
-
-
-def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_classes = 2, device='cuda'):
+def train_one_epoch(model, train_loader, criterion, optimizer, device='cuda', ema = None):
 
     model.train()
 
@@ -49,6 +49,9 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_cl
 
         optimizer.step()
 
+        if ema is not None:
+            ema.update(model)
+
         tot_loss += loss.item() * batch.batch_size
         nb_sample += batch.batch_size
 
@@ -57,13 +60,13 @@ def train_one_epoch(model, train_loader, criterion, optimizer, scheduler, num_cl
         tot_acc += (y_prediction == batch.y).sum().item()
         # acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
 
-    scheduler.step()
+    
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
 
 
-def valid_one_epoch(model, val_loader, criterion, num_classes = 2, device='cuda'):
+def valid_one_epoch(model, val_loader, criterion, device='cuda'):
 
     model.eval()
 
@@ -211,6 +214,7 @@ def main() -> None:
 
         model = DAGT(**cfg['model_params'])
     
+
     num_classes = cfg['model_params']['out_channels']
 
     print(f'Model {cfg["model"]}: Check')
@@ -272,6 +276,10 @@ def main() -> None:
     
     model.to(device)
 
+    model_ema = None
+    if cfg["ema"]:
+        model_ema = ModelEmaV3(model, decay=0.999)
+
     print("Start training")
 
     for epoch in tqdm(range(cfg['max_epochs'])):
@@ -281,16 +289,21 @@ def main() -> None:
             train_dataloader,
             criterion_train,
             optimizer,
-            scheduler,
-            num_classes=num_classes,
-            device=device
+            device=device,
+            ema=model_ema
         )
 
         val_loss, val_acc = valid_one_epoch(
             model,
             val_dataloader,
             criterion_test,
-            num_classes=num_classes,
+            device=device
+        )
+
+        val_loss_ema, val_acc_ema = valid_one_epoch(
+            model_ema.module,
+            val_dataloader,
+            criterion_test,
             device=device
         )
 
@@ -300,8 +313,12 @@ def main() -> None:
             'train/acc' : train_acc,
             'val/loss': val_loss,
             'val/acc': val_acc,
+            'val/loss_ema': val_loss_ema,
+            'val/acc_ema': val_acc_ema,
             'lr': scheduler.get_last_lr()[0],
         })
+        
+        scheduler.step()
 
         improved_loss = val_loss < best_loss - min_delta
 
@@ -312,6 +329,7 @@ def main() -> None:
 
             torch.save({
                         "model_state_dict": model.state_dict(),
+                        # "model_state_dict": model_ema.module.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scheduler_state_dict": scheduler.state_dict(),
                         "epoch": epoch,
@@ -326,6 +344,7 @@ def main() -> None:
             best_acc = val_acc
             torch.save({
                         "model_state_dict": model.state_dict(),
+                        # "model_state_dict": model_ema.module.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "scheduler_state_dict": scheduler.state_dict(),
                         "epoch": epoch,
@@ -335,6 +354,7 @@ def main() -> None:
         
         torch.save({
                     "model_state_dict": model.state_dict(),
+                    # "model_state_dict": model_ema.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
                     "epoch": epoch,
@@ -347,6 +367,7 @@ def main() -> None:
         print(f'Epoch {epoch}:')
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
         print(f'Val_loss : {val_loss}, Val_acc : {val_acc}')
+        print(f'Val_loss_ema : {val_loss_ema}, Val_acc_ema : {val_acc_ema}')
 
         if epochs_without_improvement >= patience and epoch >= min_epochs:
             print(f"Early stopping at epoch: {epoch}")

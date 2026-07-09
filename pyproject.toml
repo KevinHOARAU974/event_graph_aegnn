@@ -66,6 +66,8 @@ dependencies = [
     "adapted-sgformer>=0.0.0",
     "h5py>=3.16.0",
     "hdf5plugin>=6.0.0",
+    "dagr>=0.0.0",
+    "timm>=1.0.27",
 ]
 
 [tool.uv.workspace]
@@ -74,6 +76,7 @@ members = [
 ]
 
 [tool.uv.sources]
+dagr = { path = "./external/dagr", editable = true }
 goat = { path = "./external/goat", editable = true }
 aegnn = { path = "./external/aegnn", editable = true }
 grit = { path = "./external/GRIT", editable = true }
