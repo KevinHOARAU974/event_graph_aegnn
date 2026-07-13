@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import random
 
 from aegnn.utils.git import get_git_info
+from aegnn.models.networks.graph_res import GraphRes
 
 from pathlib import Path
 from tqdm import tqdm
@@ -20,6 +21,7 @@ from timm.utils import ModelEmaV3
 
 from adaptedsgformer.model import AdaptedSGFormer, AEGT, DAGT
 from adaptedsgformer.dataset import GraphDataset
+from torch_geometric.transforms import Cartesian
 from torchmetrics.functional import accuracy
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
@@ -64,8 +66,6 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device='cuda', em
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
-
-
 def valid_one_epoch(model, val_loader, criterion, device='cuda'):
 
     model.eval()
@@ -91,16 +91,13 @@ def valid_one_epoch(model, val_loader, criterion, device='cuda'):
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
-def test_model(model, test_loader, criterion, num_classes = 2, device='cuda'):
+def test_model(model, test_loader, criterion, device='cuda'):
 
     model.eval()
 
     tot_loss = 0.0
     tot_acc = 0.0
     nb_sample = 0
-
-    # y_targets = []
-    # y_preds = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -116,32 +113,6 @@ def test_model(model, test_loader, criterion, num_classes = 2, device='cuda'):
             y_prediction = torch.argmax(out, dim=-1)
 
             tot_acc += (y_prediction == batch.y).sum().item()
-
-            # y_targets.append(batch.y)
-            # y_preds.append(y_prediction)
-    
-    # preds = torch.cat(y_preds)
-    # targets = torch.cat(y_targets)
-
-    # cm = confusion_matrix(targets.cpu().numpy(), 
-    #                       preds.cpu().numpy())
-
-    # fig, ax = plt.subplots(figsize=(8, 8))
-
-    # disp = ConfusionMatrixDisplay(
-    #     confusion_matrix=cm,
-    #     # display_labels=data_module.classes
-    # )
-
-    # disp.plot(
-    #     ax=ax,
-    #     xticks_rotation=90,
-    #     colorbar=True
-    # )
-
-    # plt.tight_layout()
-    # plt.savefig(f"{checkpoint_path}/confusion_matrix.png", dpi=300)
-    # plte.close()
 
     return tot_loss/nb_sample, tot_acc/nb_sample
 
@@ -173,9 +144,13 @@ def main() -> None:
     ### Datasets and Dataloader
     root = Path(os.path.expanduser(cfg['dataset']['root'])) 
 
-    train_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'training')
-    val_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'validation')
-    test_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'test')
+    transform = None
+    if cfg["model"] == "aegnn":
+        transform = Cartesian(cat=False,norm=True)
+
+    train_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'training',transform=transform)
+    val_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'validation',transform=transform)
+    test_dataset = GraphDataset(root / cfg['dataset']['name'] / 'processed' / 'test',transform=transform)
 
     cfg_ds = load_config(root / cfg['dataset']['name'] / "dataset.yaml")
 
@@ -193,10 +168,11 @@ def main() -> None:
     test_dataloader = DataLoader(test_dataset, shuffle=False, **cfg['dataloader'])
 
     print("Dataloaders : Check")
-    ### Model
 
+    ### Model
     if cfg["model"] == 'adapted_sgformer':
         model = AdaptedSGFormer(**cfg['model_params'])
+
     elif cfg["model"] == 'aegt': 
 
         cfg["model_params"]["max_periods"] = [w, h, cfg_ds["max_time_training"]]
@@ -205,6 +181,7 @@ def main() -> None:
 
         model = AEGT(**cfg['model_params'])
         # cfg['model_params']['pooling_size'] = tuple(cfg['model_params']['pooling_size'])
+
     elif cfg["model"] == 'dagt':
         
         cfg["model_params"]["height"] = h
@@ -213,9 +190,15 @@ def main() -> None:
         cfg["model_params"]["factors"] = cfg_ds["factors"]
 
         model = DAGT(**cfg['model_params'])
+
+    elif cfg["model"] == "aegnn":
+
+        cfg["model_params"]["input_shape"] = torch.tensor([w, h, 3])
+        model = GraphRes(**cfg['model_params'])
+        transform = Cartesian(cat=False,norm=True)
     
 
-    num_classes = cfg['model_params']['out_channels']
+    # num_classes = cfg['model_params']['out_channels']
 
     print(f'Model {cfg["model"]}: Check')
 
@@ -234,7 +217,7 @@ def main() -> None:
                 {'params': model.params2}
             ],
             **cfg['optimizer'])
-    elif cfg["model"] in ("aegt", "dagt"):
+    elif cfg["model"] in ("aegt", "dagt", "aegnn"):
         optimizer = torch.optim.AdamW(model.parameters(),
             **cfg['optimizer'])
 
@@ -385,12 +368,14 @@ def main() -> None:
         best_model = AEGT(**cfg['model_params'])
     elif cfg["model"] == 'dagt':
         best_model = DAGT(**cfg['model_params'])
+    elif cfg["model"] == "aegnn":
+        best_model = GraphRes(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
 
     best_model.to(device)
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, num_classes=num_classes, device=device)
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
 
 
     wandb.log({
@@ -410,6 +395,8 @@ def main() -> None:
         best_model = AEGT(**cfg['model_params'])
     elif cfg["model"] == 'dagt':
         best_model = DAGT(**cfg['model_params'])
+    elif cfg["model"] == "aegnn":
+        best_model = GraphRes(**cfg['model_params'])
 
     best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
 
@@ -417,7 +404,7 @@ def main() -> None:
 
     # Test the best model
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, num_classes=num_classes, device=device)
+    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
 
 
     wandb.log({

@@ -385,46 +385,6 @@ class DAGT(nn.Module):
                                             pooling_params=self.pooling_params,
                                             blockGT_params=self.block_gt_params)
             )
-
-        # self.blockDAGT1 = BlockDAGT(channels_block[0],
-        #                             channels_block[1],
-        #                             voxel_size=voxel_size[0],
-        #                             pe_dim=pe_dim,
-        #                             pe_aggr=pe_aggr,
-        #                             encoding_periods=encoding_periods,
-        #                             factors= factors,
-        #                             pooling_params=self.pooling_params,
-        #                             blockGT_params=self.block_gt_params)
-        
-        # self.blockDAGT2 = BlockDAGT(channels_block[1],
-        #                             channels_block[2],
-        #                             voxel_size=voxel_size[1],
-        #                             pe_dim=pe_dim,
-        #                             pe_aggr=pe_aggr,
-        #                             encoding_periods=encoding_periods,
-        #                             factors= factors,
-        #                             pooling_params=self.pooling_params,
-        #                             blockGT_params=self.block_gt_params)
-        
-        # self.blockDAGT3 = BlockDAGT(channels_block[2],
-        #                             channels_block[3],
-        #                             voxel_size=voxel_size[2],
-        #                             pe_dim=pe_dim,
-        #                             pe_aggr=pe_aggr,
-        #                             encoding_periods=encoding_periods,
-        #                             factors= factors,
-        #                             pooling_params=self.pooling_params,
-        #                             blockGT_params=self.block_gt_params)
-        
-        # self.blockDAGT4 = BlockDAGT(channels_block[3],
-        #                             channels_block[4],
-        #                             voxel_size=voxel_size[3],
-        #                             pe_dim=pe_dim,
-        #                             pe_aggr=pe_aggr,
-        #                             encoding_periods=encoding_periods,
-        #                             factors= factors,
-        #                             pooling_params=self.pooling_params,
-        #                             blockGT_params=self.block_gt_params)
         
         self.final_pooling = Max_voxel_pooling(sensor_shape//4, size=final_size, start = [0., 0.], end=sensor_shape-1)
         

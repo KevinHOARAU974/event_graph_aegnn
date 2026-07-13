@@ -3,12 +3,13 @@ import torch
 from pathlib import Path
 
 from torch_geometric.data import Dataset
+from torch_geometric.transforms import Cartesian
 
 
 class GraphDataset(Dataset):
 
-    def __init__(self, root):
-        super().__init__(root)
+    def __init__(self, root, transform = None):
+        super().__init__(root, transform=transform)
 
         self.files = [p for p in Path(root).rglob("*") if p.is_file() and not p.name.startswith(".")]
 

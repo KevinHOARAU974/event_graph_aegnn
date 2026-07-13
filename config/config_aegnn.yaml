@@ -1,0 +1,48 @@
+seed: 12345
+project_name : &dataset "ncars"
+
+model: "aegnn"
+
+task: "recognition"
+
+ema: True
+
+dataset:
+  root: "../data/"
+  name: *dataset
+
+dataloader:  
+  batch_size : &bs 16
+  num_workers: 8
+  pin_memory: True
+
+model_params:
+  dataset: *dataset
+  num_outputs: 2
+  pooling_size:
+    - 16
+    - 12
+  bias: True
+  root_weight: True
+  dropout_gcn: 0.1
+  dropout_classifier: 0.1
+  
+
+early_stopping:
+  patience: 5
+  min_delta: 1e-3
+  min_epochs: 20
+
+criterion:
+  label_smoothing : 0.1
+
+max_epochs : 1
+
+optimizer:
+  lr : 1e-4
+  weight_decay : 0.0
+
+scheduler:
+  eta_min: 0.0
+
+log_dir: "./test_asgf"
