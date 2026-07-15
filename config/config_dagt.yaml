@@ -42,7 +42,8 @@ early_stopping:
 criterion:
   label_smoothing : 0.1
 
-max_epochs : 1
+max_epochs : 2
+warmup_epochs: 1
 
 optimizer:
   lr : 1e-4
@@ -50,5 +51,7 @@ optimizer:
 
 scheduler:
   eta_min: 0.0
+
+
 
 log_dir: "./test_asgf"

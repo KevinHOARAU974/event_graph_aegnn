@@ -211,6 +211,9 @@ def main() -> None:
     cfg['optimizer']['weight_decay'] = float(cfg['optimizer']['weight_decay']) if cfg['optimizer']['weight_decay'] != None else None
     cfg['scheduler']['eta_min'] = float(cfg['scheduler']['eta_min'])
 
+    warmup_epochs = cfg["warmup_epochs"]
+    max_epochs = cfg["max_epochs"] 
+
     if cfg["model"] == 'adapted_sgformer':
         optimizer = torch.optim.AdamW([
                 {'params': model.params1},
@@ -221,7 +224,11 @@ def main() -> None:
         optimizer = torch.optim.AdamW(model.parameters(),
             **cfg['optimizer'])
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['max_epochs'], **cfg['scheduler'])
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
+    
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs-warmup_epochs, **cfg['scheduler'])
+
+    scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_epochs])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -290,6 +297,8 @@ def main() -> None:
             device=device
         )
 
+        current_lr = optimizer.param_groups[0]["lr"]
+
         wandb.log({
             'epoch' : epoch,
             'train/loss' : train_loss,
@@ -298,7 +307,7 @@ def main() -> None:
             'val/acc': val_acc,
             'val/loss_ema': val_loss_ema,
             'val/acc_ema': val_acc_ema,
-            'lr': scheduler.get_last_lr()[0],
+            'lr': current_lr,
         })
         
         scheduler.step()

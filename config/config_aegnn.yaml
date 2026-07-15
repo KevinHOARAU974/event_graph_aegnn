@@ -37,6 +37,7 @@ criterion:
   label_smoothing : 0.1
 
 max_epochs : 1
+warmup_epochs: 1
 
 optimizer:
   lr : 1e-4
