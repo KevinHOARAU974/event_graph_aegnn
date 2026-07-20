@@ -62,8 +62,6 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device='cuda', em
         tot_acc += (y_prediction == batch.y).sum().item()
         # acc_ls.append(accuracy(preds=y_prediction, target=batch.y, task="multiclass", num_classes=num_classes).item())
 
-    
-
     return tot_loss/nb_sample, tot_acc/nb_sample
 
 def valid_one_epoch(model, val_loader, criterion, device='cuda'):
@@ -254,21 +252,27 @@ def main() -> None:
     wandb.define_metric("epoch")
     wandb.define_metric("*", step_metric="epoch")
 
-    #Training pipeline
+    #Early stopping
     best_acc = -1
+    best_acc_ema = -1
     best_loss = float("inf")
+    best_loss_ema = float("inf")
 
     patience = cfg['early_stopping']["patience"]
-    min_delta = float(cfg['early_stopping']["min_delta"])
+    min_delta_loss = 1e-3
+    min_delta_acc = 1e-4
     min_epochs = int(cfg['early_stopping']["min_epochs"])
+    metric = cfg['early_stopping']["metric"]
 
     epochs_without_improvement = 0
     
     model.to(device)
 
+
+    # Ema model
     model_ema = None
     if cfg["ema"]:
-        model_ema = ModelEmaV3(model, decay=0.999)
+        model_ema = ModelEmaV3(model, decay=cfg["ema_decay"])
 
     print("Start training")
 
@@ -290,12 +294,13 @@ def main() -> None:
             device=device
         )
 
-        val_loss_ema, val_acc_ema = valid_one_epoch(
-            model_ema.module,
-            val_dataloader,
-            criterion_test,
-            device=device
-        )
+        if model_ema is not None:
+            val_loss_ema, val_acc_ema = valid_one_epoch(
+                model_ema.module,
+                val_dataloader,
+                criterion_test,
+                device=device
+            )
 
         current_lr = optimizer.param_groups[0]["lr"]
 
@@ -305,122 +310,241 @@ def main() -> None:
             'train/acc' : train_acc,
             'val/loss': val_loss,
             'val/acc': val_acc,
-            'val/loss_ema': val_loss_ema,
-            'val/acc_ema': val_acc_ema,
             'lr': current_lr,
         })
+
+        if model_ema is not None:
+            wandb.log({
+            'val/loss_ema': val_loss_ema,
+            'val/acc_ema': val_acc_ema,
+            })
         
         scheduler.step()
+        
+        #Compute the improvement of each metric
+        improved_loss = val_loss < best_loss - min_delta_loss
+        improved_acc = val_acc > best_acc + min_delta_acc
 
-        improved_loss = val_loss < best_loss - min_delta
+        if model_ema is not None:
+            improved_loss_ema = val_loss_ema < best_loss_ema - min_delta_loss
+            improved_acc_ema = val_acc_ema > best_acc + min_delta_acc
+
 
         if improved_loss:
 
             best_loss = val_loss
-            epochs_without_improvement = 0
 
-            torch.save({
-                        "model_state_dict": model.state_dict(),
-                        # "model_state_dict": model_ema.module.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scheduler_state_dict": scheduler.state_dict(),
-                        "epoch": epoch,
-                        "best_val_acc": best_acc,
-                        "cfg": cfg,
-                        }, f"{checkpoint_path}/best_loss.pth")
+            if cfg["checkpoint_save"]["best_loss"]:
+                torch.save({
+                            "model_state_dict": model.state_dict(), 
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "scheduler_state_dict": scheduler.state_dict(),
+                            "epoch": epoch,
+                            "best_val_loss": best_loss,
+                            "cfg": cfg,
+                            }, f"{checkpoint_path}/best_loss.pth")
         
+        if improved_acc:
+
+            best_acc = best_acc
+
+            if cfg["checkpoint_save"]["best_acc"]:
+                torch.save({
+                            "model_state_dict": model.state_dict(), 
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "scheduler_state_dict": scheduler.state_dict(),
+                            "epoch": epoch,
+                            "best_val_acc": best_acc,
+                            "cfg": cfg,
+                            }, f"{checkpoint_path}/best_acc.pth")
+                
+        if model_ema is not None:
+            if improved_loss_ema:
+
+                best_loss_ema = val_loss_ema
+
+                if cfg["checkpoint_save"]["best_loss_ema"]:
+                    torch.save({
+                                "model_state_dict": model_ema.module.state_dict(), 
+                                "optimizer_state_dict": optimizer.state_dict(),
+                                "scheduler_state_dict": scheduler.state_dict(),
+                                "epoch": epoch,
+                                "best_val_loss_ema": best_loss_ema,
+                                "cfg": cfg,
+                                }, f"{checkpoint_path}/best_loss_ema.pth")
+            
+            if improved_acc_ema:
+
+                best_acc_ema = val_acc_ema
+
+                if cfg["checkpoint_save"]["best_acc_ema"]:
+                    torch.save({
+                                "model_state_dict": model_ema.module.state_dict(), 
+                                "optimizer_state_dict": optimizer.state_dict(),
+                                "scheduler_state_dict": scheduler.state_dict(),
+                                "epoch": epoch,
+                                "best_val_acc_ema": best_acc_ema,
+                                "cfg": cfg,
+                                }, f"{checkpoint_path}/best_acc_ema.pth")
+        
+        #early stopping criteria
+
+        if metric == "loss" and improved_loss:
+            epochs_without_improvement = 0
+        elif metric == "acc" and improved_acc:
+            epochs_without_improvement = 0
+        elif model_ema is not None:
+            if metric == "loss_ema" and improved_loss_ema:
+                epochs_without_improvement = 0
+            elif metric == "acc_ema" and improved_acc_ema:
+                epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
 
-        if val_acc > best_acc:
-            best_acc = val_acc
-            torch.save({
-                        "model_state_dict": model.state_dict(),
-                        # "model_state_dict": model_ema.module.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scheduler_state_dict": scheduler.state_dict(),
-                        "epoch": epoch,
-                        "best_val_acc": best_acc,
-                        "cfg": cfg,
-                        }, f"{checkpoint_path}/best_acc.pth")
         
         torch.save({
                     "model_state_dict": model.state_dict(),
-                    # "model_state_dict": model_ema.module.state_dict(),
+                    "model_state_dict_ema": model_ema.module.state_dict() if model_ema is not None else None,
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
                     "epoch": epoch,
                     "last_val_acc": val_acc,
                     "last_val_loss": val_loss,
+                    "last_val_acc_ema": val_acc_ema if model_ema is not None else None,
+                    "last_val_loss_ema": val_loss_ema if model_ema is not None else None,
                     "cfg": cfg,
                     }, f"{checkpoint_path}/last.pth")
         
-
         print(f'Epoch {epoch}:')
         print(f'Train_loss : {train_loss}, Train_acc : {train_acc}')
         print(f'Val_loss : {val_loss}, Val_acc : {val_acc}')
-        print(f'Val_loss_ema : {val_loss_ema}, Val_acc_ema : {val_acc_ema}')
+
+        if model_ema is not None:
+            print(f'Val_loss_ema : {val_loss_ema}, Val_acc_ema : {val_acc_ema}')
 
         if epochs_without_improvement >= patience and epoch >= min_epochs:
             print(f"Early stopping at epoch: {epoch}")
             break
+    
 
-    #Test
+    ### TO DO ###
+    ################Test#######################
 
     #Load best model in accuracy
 
-    best_checkpoint_acc = torch.load(f"{checkpoint_path}/best_acc.pth", weights_only=False)
 
-    if cfg["model"] == 'adapted_sgformer':
-        best_model = AdaptedSGFormer(**cfg['model_params'])
-    elif cfg["model"] == 'aegt':
-        best_model = AEGT(**cfg['model_params'])
-    elif cfg["model"] == 'dagt':
-        best_model = DAGT(**cfg['model_params'])
-    elif cfg["model"] == "aegnn":
-        best_model = GraphRes(**cfg['model_params'])
+    if cfg["checkpoint_save"]["best_acc"]:
+        best_checkpoint_acc = torch.load(f"{checkpoint_path}/best_acc.pth", weights_only=False)
 
-    best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
+        if cfg["model"] == 'adapted_sgformer':
+            best_model = AdaptedSGFormer(**cfg['model_params'])
+        elif cfg["model"] == 'aegt':
+            best_model = AEGT(**cfg['model_params'])
+        elif cfg["model"] == 'dagt':
+            best_model = DAGT(**cfg['model_params'])
+        elif cfg["model"] == "aegnn":
+            best_model = GraphRes(**cfg['model_params'])
 
-    best_model.to(device)
+        best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
+        best_model.to(device)
+
+        test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
 
 
-    wandb.log({
-            # 'epoch' : epoch,
-            'best_acc_model/loss' : test_loss,
-            'best_acc_model/acc' : test_acc,
-        })
+        wandb.log({
+                # 'epoch' : epoch,
+                'best_acc_model/loss' : test_loss,
+                'best_acc_model/acc' : test_acc,
+            })
     
 
     #Load best model in loss
-    
-    best_checkpoint_loss = torch.load(f"{checkpoint_path}/best_loss.pth", weights_only=False)
+    if cfg["checkpoint_save"]["best_loss"]:
 
-    if cfg["model"] == 'adapted_sgformer':
-        best_model = AdaptedSGFormer(**cfg['model_params'])
-    elif cfg["model"] == 'aegt':
-        best_model = AEGT(**cfg['model_params'])
-    elif cfg["model"] == 'dagt':
-        best_model = DAGT(**cfg['model_params'])
-    elif cfg["model"] == "aegnn":
-        best_model = GraphRes(**cfg['model_params'])
+        best_checkpoint_loss = torch.load(f"{checkpoint_path}/best_loss.pth", weights_only=False)
 
-    best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
+        if cfg["model"] == 'adapted_sgformer':
+            best_model = AdaptedSGFormer(**cfg['model_params'])
+        elif cfg["model"] == 'aegt':
+            best_model = AEGT(**cfg['model_params'])
+        elif cfg["model"] == 'dagt':
+            best_model = DAGT(**cfg['model_params'])
+        elif cfg["model"] == "aegnn":
+            best_model = GraphRes(**cfg['model_params'])
 
-    best_model.to(device)
+        best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
 
-    # Test the best model
+        best_model.to(device)
 
-    test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
+        # Test the best model
+
+        test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
 
 
-    wandb.log({
-            # 'epoch' : epoch,
-            'best_loss_model/loss' : test_loss,
-            'best_loss_model/acc' : test_acc,
-        })
+        wandb.log({
+                # 'epoch' : epoch,
+                'best_loss_model/loss' : test_loss,
+                'best_loss_model/acc' : test_acc,
+            })
+
+    if model_ema is not None: 
+
+        if cfg["checkpoint_save"]["best_acc_ema"]:
+
+            best_checkpoint_acc = torch.load(f"{checkpoint_path}/best_acc_ema.pth", weights_only=False)
+
+            if cfg["model"] == 'adapted_sgformer':
+                best_model = AdaptedSGFormer(**cfg['model_params'])
+            elif cfg["model"] == 'aegt':
+                best_model = AEGT(**cfg['model_params'])
+            elif cfg["model"] == 'dagt':
+                best_model = DAGT(**cfg['model_params'])
+            elif cfg["model"] == "aegnn":
+                best_model = GraphRes(**cfg['model_params'])
+
+            best_model.load_state_dict(best_checkpoint_acc["model_state_dict"])
+
+            best_model.to(device)
+
+            test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
+
+
+            wandb.log({
+                    # 'epoch' : epoch,
+                    'best_acc_ema_model/loss' : test_loss,
+                    'best_acc_ema_model/acc' : test_acc,
+                })
+        
+
+        #Load best model in loss
+        if cfg["checkpoint_save"]["best_loss_ema"]:
+
+            best_checkpoint_loss = torch.load(f"{checkpoint_path}/best_loss_ema.pth", weights_only=False)
+
+            if cfg["model"] == 'adapted_sgformer':
+                best_model = AdaptedSGFormer(**cfg['model_params'])
+            elif cfg["model"] == 'aegt':
+                best_model = AEGT(**cfg['model_params'])
+            elif cfg["model"] == 'dagt':
+                best_model = DAGT(**cfg['model_params'])
+            elif cfg["model"] == "aegnn":
+                best_model = GraphRes(**cfg['model_params'])
+
+            best_model.load_state_dict(best_checkpoint_loss["model_state_dict"])
+
+            best_model.to(device)
+
+            # Test the best model
+
+            test_loss, test_acc = test_model(best_model, test_dataloader, criterion_test, device=device)
+
+
+            wandb.log({
+                    # 'epoch' : epoch,
+                    'best_loss_ema_model/loss' : test_loss,
+                    'best_loss_ema_model/acc' : test_acc,
+                })
 
     wandb.finish()
 

@@ -6,6 +6,7 @@ model: "dagt"
 task: "recognition"
 
 ema: True
+ema_decay: 0.995
 
 dataset:
   root: "../data/"
@@ -38,12 +39,13 @@ early_stopping:
   patience: 5
   min_delta: 1e-3
   min_epochs: 20
+  metric: "loss"
 
 criterion:
   label_smoothing : 0.1
 
-max_epochs : 2
-warmup_epochs: 1
+max_epochs : 1
+warmup_epochs: 0
 
 optimizer:
   lr : 1e-4
@@ -52,6 +54,10 @@ optimizer:
 scheduler:
   eta_min: 0.0
 
-
+checkpoint_save:
+  best_loss: True
+  best_acc: True
+  best_loss_ema: True
+  best_acc_ema: True
 
 log_dir: "./test_asgf"
