@@ -13,3 +13,12 @@
 [submodule "external/SGFormer"]
 	path = external/SGFormer
 	url = https://github.com/KevinHOARAU974/SGFormer.git
+[submodule "external/dagr"]
+	path = external/dagr
+	url = https://github.com/KevinHOARAU974/dagr.git
+[submodule "external/YOLOX"]
+	path = external/YOLOX
+	url = https://github.com/KevinHOARAU974/YOLOX.git
+[submodule "external/detectron2"]
+	path = external/detectron2
+	url = https://github.com/KevinHOARAU974/detectron2.git
