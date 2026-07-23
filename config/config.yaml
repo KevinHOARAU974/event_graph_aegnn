@@ -1,6 +1,6 @@
 callback_params:
   patience: 30
-data_dir: /home/ibrahim/event_graph_aegnn/test_codes/data/
+data_dir: /home/ibrahim/event_graph_aegnn/test_codes/data/ncars/beta_processed/aegnn_raduis_preprocessing/xytp-beta-1/
 data_params:
   batch_size: 8
   num_workers: 8
@@ -8,18 +8,17 @@ data_params:
   shuffle: true
 dataset: ncars
 debug: true
-log_dir: external/training_log_aegnn/
+log_dir: external/training_beta_adaptative/
 log_gradients: true
 model: graph_res
 model_params:
   dim: 3
   eta_min: 0.0
-  label_smoothing: 0.1
   lr: 0.001
   weight_decay: 5.0e-05
 profile: true
-project_name: aegnn_adaptative_graph
-seed: 12345
+project_name: training_beta_pagoda
+seed: 12349
 task: recognition
 trainer:
   gradient_clip_val: 0

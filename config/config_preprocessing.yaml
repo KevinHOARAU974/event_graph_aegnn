@@ -1,11 +1,30 @@
 seed: 12345
 debug: False
 
-dataset: 'ncars'
+dataset: 'ncars' # 'ncars' or 'ncars_get'
+
 
 data_params: 
-  batch_size: 4
-  num_workers: 8
+  batch_size: 8
+  num_workers: 4
   pin_memory: True
-  shuffle: True
+  shuffle: False
+  method: 'raduis' # 'raduis', 'adaptative'
+  k_min: 0 # value ignored if method != adaptative
+  k_max: 16 # value ignored if method != adaptative
+  k_density: 8 # value ignored if method != adaptative
+
+  r : 3
+  d_max: 32
+  "n_samples": 10000
+  "sampling": True
+
+  beta:5e-7 #multplication factor to rescale time.
+
+  dims: (120,100) # sensor dims
+  group_num: 2 # group num in GET article (noted G in the paper)
+  patch_size: (4,4) # parch size as described in GET
+
+
+
 data_dir: "/home/ibrahim/event_graph_aegnn/test_codes/data/"
