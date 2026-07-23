@@ -47,6 +47,7 @@ training_log_aegnn/
 optuna_log_aegnn/
 lightning_logs/
 results.csv
+logs/
 
 #config cluster
 config/*-cluster-*.yaml
@@ -57,3 +58,4 @@ test_codes/
 #Checkpoints
 
 checkpoints/
+cluster_checkpoint

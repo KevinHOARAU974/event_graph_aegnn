@@ -29,6 +29,7 @@ trainer:
 callback_params:
   patience: 5
   
+resume_ckpt:
 
 log_gradients: True
 profile: True
