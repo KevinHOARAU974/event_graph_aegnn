@@ -1,0 +1,79 @@
+seed: 12345
+project_name : &dataset "ncaltech101"
+
+model: "dagt"
+
+task: "detection"
+
+ema: True
+ema_decay: 0.995
+
+dataset:
+  root: "../data/"
+  name: *dataset
+
+dataloader:  
+  batch_size : &bs 16
+  num_workers: 8
+  pin_memory: True
+
+backbone:
+  in_channels: 24
+  num_blocks: 4
+  hidden_channels_list: [32, 48, 64, 64, 64]
+  last_voxel_div: '5x7'
+  final_size: 16
+  pe_dim: 12
+  pe_aggr: 'cat'
+  pool_aggr: 'max'
+  keep_temporal_ordering: False
+  self_loop: False
+  encoding_periods: [120, 100, 50]
+  factors: [1,1,1]
+  num_heads: 1
+  dropout_trans: 0.1
+  dropout_ff: 0.1
+  dropout_classifier: 0.1
+  norm_func: 'layer'
+  num_scales:  
+
+heads:
+  activation: relu
+  edge_attr_dim: 2
+  aggr: sum
+  kernel_size: 5
+  pooling_aggr: max
+  base_width: 0.5
+  after_pool_width: 1
+  net_stem_width: 1
+  yolo_stem_width: 1
+  num_scales: 1
+
+
+
+# early_stopping:
+#   patience: 5
+#   min_delta: 1e-3
+#   min_epochs: 20
+#   metric: "loss"
+
+criterion:
+  label_smoothing : 0.1
+
+max_epochs : 1
+warmup_epochs: 0
+
+optimizer:
+  lr : 1e-4
+  weight_decay : 0.0
+
+scheduler:
+  eta_min: 0.0
+
+checkpoint_save:
+  best_loss: True
+  best_acc: True
+  best_loss_ema: True
+  best_acc_ema: True
+
+log_dir: "./test_asgf"

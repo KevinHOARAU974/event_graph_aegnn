@@ -19,7 +19,7 @@ from torch_geometric.loader import DataLoader
 
 from timm.utils import ModelEmaV3
 
-from adaptedsgformer.model import AdaptedSGFormer, AEGT, DAGT
+from adaptedsgformer.models.recognition_models import AdaptedSGFormer, AEGT, DAGT
 from adaptedsgformer.dataset import GraphDataset
 from torch_geometric.transforms import Cartesian
 from torchmetrics.functional import accuracy

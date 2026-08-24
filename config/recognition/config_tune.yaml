@@ -1,0 +1,42 @@
+seed: 12345
+project_name: 'aegnn'
+
+model: "graph_res"
+dataset: "ncaltech101"
+task: "recognition"
+
+data_params: 
+  batch_size: 4
+  num_workers: 8
+  pin_memory: True
+  shuffle: True
+
+model_params:
+  lr: 0.001
+  weight_decay: 0.00005
+  eta_min: 0.0
+  dim: 3
+
+trainer:
+  max_epochs: 1
+  overfit_batches: 0
+  log_every_n_steps: 1
+  gradient_clip_val: 0
+
+callback_params:
+  patience: 5
+
+optuna_params:
+  lr_min: 1e-4
+  lr_max: 5e-3
+  wd_min: 1e-6
+  wd_max: 1e-3
+  n_trials: 10
+  direction: "maximize"
+  criteria: "Val/Accuracy"
+
+profile: True
+debug: True
+
+log_dir: "optuna_log_aegnn/"
+data_dir: "/home/kevin-imagine/Documents/event_graph/data"

@@ -36,3 +36,32 @@ def compute_pooling_at_each_layer(pooling_dim_at_output, num_layers):
         poolings.append(pooling)
     poolings = torch.stack(poolings)
     return poolings
+
+def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
+    # if hasattr(self, "batch_size"):
+    #     B = self.batch_size
+    if batch_size is not None:
+        self.batch_size = batch_size
+        B = batch_size
+    elif batch is None:
+        batch = torch.zeros(size=(len(x),), dtype=torch.long, device=x.device)
+        B = 1
+        self.batch_size = B
+    else:
+        B = batch.max().item() + 1
+        self.batch_size = B
+
+    if not hasattr(self, "dense"):
+        W, H = (1 / pooling[:2] + 1e-3).long()
+        C = x.shape[-1]
+        self.dense = torch.zeros(size=(B, C, H, W), dtype=x.dtype, device=x.device)
+
+    est_x, est_y = (pos[:, :2] / pooling[:2]).t().long()
+
+    self.dense = self.dense.detach()
+    self.dense.zero_()
+
+    dense = self.dense[:B] if B < self.dense.shape[0] else self.dense
+    dense[batch.long(), :, est_y, est_x] = x
+
+    return dense
