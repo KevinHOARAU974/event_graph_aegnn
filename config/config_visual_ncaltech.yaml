@@ -1,0 +1,3 @@
+data_directory: "../data/"
+
+model_path: "../checkpoints/dagr/ncaltech101/8rvnn9lb/best_model_mAP_0.48766550282544735.pth"

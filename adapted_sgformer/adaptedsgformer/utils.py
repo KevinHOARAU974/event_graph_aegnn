@@ -65,3 +65,78 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
     dense[batch.long(), :, est_y, est_x] = x
 
     return dense
+
+def format_data(data, normalizer=None):
+    if normalizer is None:
+        normalizer = torch.stack([data.width[0], data.height[0], data.time_window[0]], dim=-1)
+
+    if hasattr(data, "image"):
+        data.image = data.image.float() / 255.0
+
+    data.pos = torch.cat([data.pos, data.t.view((-1,1))], dim=-1)
+    data.t = None
+    data.x = ((1 - data.x)//2).float()
+    data.pos = data.pos / normalizer
+    return data
+
+def check_graphs(data, stage, log_file="graph_debug.log"):
+    # IDs de graphes qui possèdent effectivement des noeuds
+    present_ids, counts = torch.unique(
+        data.batch,
+        return_counts=True
+    )
+
+    # Nombre de samples attendus dans le batch
+    expected_graphs = data.num_graphs
+
+    expected_ids = torch.arange(
+        expected_graphs,
+        device=data.batch.device
+    )
+
+    # IDs de graphes sans aucun noeud
+    missing_ids = expected_ids[
+        ~torch.isin(expected_ids, present_ids)
+    ]
+
+    # Indices des samples dans le Dataset
+    sample_indices = (
+        data.sample_idx.view(-1).detach().cpu().tolist()
+        if hasattr(data, "sample_idx")
+        else None
+    )
+
+    missing_ids_cpu = missing_ids.detach().cpu().tolist()
+
+    # Correspondance :
+    # graph id dans le batch -> index original dans le Dataset
+    if sample_indices is not None:
+        missing_samples = [
+            sample_indices[i]
+            for i in missing_ids_cpu
+            if i < len(sample_indices)
+        ]
+    else:
+        missing_samples = None
+
+    line = (
+        f"{stage} | "
+        f"nodes={data.x.shape[0]} | "
+        f"expected_graphs={expected_graphs} | "
+        f"present_graphs={len(present_ids)} | "
+        f"missing={missing_ids_cpu} | "
+        f"missing_samples={missing_samples} | "
+        f"sample_idx={sample_indices} | "
+        f"counts={counts.detach().cpu().tolist()}\n"
+    )
+
+    with open(log_file, "a") as f:
+        f.write(line)
+
+    # Affiche uniquement les anomalies dans le terminal
+    if missing_ids_cpu:
+        print(
+            f"\n⚠️ {stage}: "
+            f"missing graph IDs={missing_ids_cpu}, "
+            f"dataset samples={missing_samples}"
+        )

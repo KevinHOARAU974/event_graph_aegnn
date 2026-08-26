@@ -45,7 +45,8 @@ class TransConvLayer(nn.Module):
         # Groupe by graph in order to have global attention by graph in batch
         x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
         
-        batch_size = len(batch.unique())
+        # batch_size = len(batch.unique())
+        batch_size = x.size(0)
 
         qs = self.Wq(x).reshape(batch_size, -1, self.num_heads, self.out_channels) 
         ks = self.Wk(x).reshape(batch_size, -1, self.num_heads, self.out_channels)

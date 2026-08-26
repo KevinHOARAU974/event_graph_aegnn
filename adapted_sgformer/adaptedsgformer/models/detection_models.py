@@ -22,7 +22,7 @@ class DetectionGT(YOLOX):
         backbone = BackboneGT(height=height, width=width, **args["backbone"])
         head = GNNHead(num_classes=num_classes,
                         strides=backbone.strides,
-                        in_channels=backbone.hidden_channels_list, args=Namespace(**args['head']))
+                        in_channels=backbone.hidden_channels_list[-backbone.num_scales:], args=Namespace(**args['head']))
         
         super().__init__(backbone, head)
 

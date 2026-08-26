@@ -8,7 +8,9 @@ from torch_geometric.data import Batch
 from dagr.model.networks.net import compute_pooling_at_each_layer
 
 from adaptedsgformer.layers.block import BlockDectectGT, BlockGT
-from adaptedsgformer.utils import embed_1D_scalar
+from adaptedsgformer.layers.ev_to_gr import EV_TGN
+
+from adaptedsgformer.utils import embed_1D_scalar,check_graphs
 
 class BackboneGT(nn.Module):
 
@@ -31,7 +33,8 @@ class BackboneGT(nn.Module):
                     dropout_trans = 0.1,
                     dropout_ff = 0.1,
                     norm_func = 'layer',
-                    num_scales = 1
+                    num_scales = 1,
+                    args_gr = None,
                     ): 
     
             super(BackboneGT, self).__init__()
@@ -75,6 +78,8 @@ class BackboneGT(nn.Module):
 
             self.num_scales = num_scales
 
+            self.events_to_graph = EV_TGN(**args_gr)
+
             self.hidden_channels_list = hidden_channels_list
             
             if self.pe_aggr == 'add':
@@ -117,9 +122,15 @@ class BackboneGT(nn.Module):
                             )
         
     def forward(self, batch :Batch):
-
+        
         device = next(self.parameters()).device
         data = batch.clone().to(device)
+
+        check_graphs(batch, "DataLoader")
+
+        data = self.events_to_graph(data)
+
+        check_graphs(data, "Après ev_to_gr")
 
         #Embedding
 
@@ -135,12 +146,16 @@ class BackboneGT(nn.Module):
             data.x = x_emb + embed_pos
         elif self.pe_aggr == 'cat':
             data.x = torch.cat((x_emb,embed_pos), dim=1)
+
+        check_graphs(data, "BACKBONE INPUT")
         
         data.x = self.blockGT0(data.x, data.batch)
 
+        check_graphs(data, "AFTER BLOCK 0")
 
         for i in range(self.num_blocks):
             data = self.block_dagt[i](data)
+            check_graphs(data, f"AFTER BLOCK {i+1}")
 
         data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
 
