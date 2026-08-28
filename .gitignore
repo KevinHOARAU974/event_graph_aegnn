@@ -50,7 +50,7 @@ results.csv
 logs/
 
 #config cluster
-config/*-cluster-*.yaml
+*-cluster-*.yaml
 
 #test code
 test_codes/

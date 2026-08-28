@@ -22,7 +22,7 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    hidden_channels_list: [32, 48, 64, 64, 64]
+    hidden_channels_list: [48, 64, 96, 96, 96]
     last_voxel_div: '5x7'
     final_size: 16
     pe_dim: 12
@@ -32,7 +32,7 @@ model_params:
     self_loop: False
     encoding_periods: [1, 1, 1]
     factors: [1,1,1]
-    num_heads: 1
+    num_heads: 12
     dropout_trans: 0.1
     dropout_ff: 0.1
     norm_func: 'layer'
@@ -73,8 +73,9 @@ resume: none
 # criterion:
 #   label_smoothing : 0.1
 
-max_epochs : 1
-warmup_epochs: 0
+max_epochs : 100
+scheduler_max_epochs: 800
+warmup_epochs: 0.3
 
 optimizer:
   lr : 1e-4

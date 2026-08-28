@@ -215,7 +215,7 @@ if __name__ == '__main__':
 
     lr_func = LRSchedule(warmup_epochs=cfg["warmup_epochs"],
                          num_iters_per_epoch=num_iters_per_epoch,
-                         tot_num_epochs=cfg["max_epochs"])
+                         tot_num_epochs=cfg["scheduler_max_epochs"])
 
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lr_func)
 
