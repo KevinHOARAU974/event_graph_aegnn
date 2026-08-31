@@ -24,6 +24,7 @@ from dagr.model.networks.ema import ModelEMA
 
 from adaptedsgformer.models.detection_models import DetectionGT
 from adaptedsgformer.utils import format_data
+from adaptedsgformer.scheduler import WarmupCosineScheduler
 
 from argparse import Namespace
 
@@ -213,9 +214,16 @@ if __name__ == '__main__':
     cfg["optimizer"]["lr"] = float(cfg["optimizer"]["lr"]) * np.sqrt(cfg["dataloader"]["batch_size"]) / np.sqrt(nominal_batch_size)
     optimizer = torch.optim.AdamW(list(model.parameters()), **cfg["optimizer"])
 
-    lr_func = LRSchedule(warmup_epochs=cfg["warmup_epochs"],
+    if cfg['scheduler_type'] == "cosineTrans":
+
+        lr_func = WarmupCosineScheduler(warmup_epochs=cfg["warmup_epochs"],
                          num_iters_per_epoch=num_iters_per_epoch,
                          tot_num_epochs=cfg["scheduler_max_epochs"])
+
+    else:
+        lr_func = LRSchedule(warmup_epochs=cfg["warmup_epochs"],
+                            num_iters_per_epoch=num_iters_per_epoch,
+                            tot_num_epochs=cfg["scheduler_max_epochs"])
 
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lr_func)
 
