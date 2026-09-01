@@ -96,14 +96,16 @@ class BlockDAGT(nn.Module):
 
         if self.pe_aggr == "add":
             assert in_channels == pe_dim
-            self.in_gt = in_channels
+            self.in_proj = in_channels
         elif self.pe_aggr == "cat":
-            self.in_gt = in_channels + pe_dim
+            self.in_proj = in_channels + pe_dim
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
+            
+        self.projection = nn.Linear(self.in_proj, self.in_channels, bias=True)
 
         self.blockGT = BlockGT(
-            self.in_gt,
+            self.in_channels,
             out_channels,
             **blockGT_params
         )
@@ -123,6 +125,8 @@ class BlockDAGT(nn.Module):
             data.x += embed_pos
         elif self.pe_aggr == "cat":
             data.x = torch.cat((data.x,embed_pos), dim=1)
+
+        data.x = self.projection(data.x)
 
         data.x = self.blockGT(data.x, data.batch)
 
@@ -157,15 +161,19 @@ class BlockDectectGT(nn.Module):
         self.factors = factors #Multiplicative Factors for each channels of positions
 
         if self.pe_aggr == "add":
-            assert in_channels == pe_dim
-            self.in_gt = in_channels
+            assert in_channels % 3 == 0
+            self.pe_dim = in_channels
+            self.in_proj = in_channels
         elif self.pe_aggr == "cat":
-            self.in_gt = in_channels + pe_dim
+            assert pe_dim % 3 == 0
+            self.in_proj = in_channels + pe_dim
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
 
+        self.proj = nn.Linear(self.in_proj, in_channels, bias=True)
+
         self.blockGT = BlockGT(
-            self.in_gt,
+            in_channels,
             out_channels,
             **blockGT_params
         )
@@ -184,6 +192,8 @@ class BlockDectectGT(nn.Module):
             data.x += embed_pos
         elif self.pe_aggr == "cat":
             data.x = torch.cat((data.x,embed_pos), dim=1)
+
+        data.x = self.proj(data.x)
 
         data.x = self.blockGT(data.x, data.batch)
 

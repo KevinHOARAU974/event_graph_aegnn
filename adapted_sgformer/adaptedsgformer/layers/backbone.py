@@ -83,9 +83,14 @@ class BackboneGT(nn.Module):
             self.hidden_channels_list = hidden_channels_list
             
             if self.pe_aggr == 'add':
-                pass
+                assert in_channels % 3 == 0
+                self.pe_dim = in_channels
+                self.in_backbone = in_channels
             elif self.pe_aggr == 'cat':
-                in_channels += pe_dim
+                assert pe_dim % 3 == 0
+                self.in_backbone = in_channels + pe_dim
+
+            self.proj = nn.Linear(self.in_backbone, in_channels, bias=True)
     
             self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
     
@@ -147,15 +152,17 @@ class BackboneGT(nn.Module):
         elif self.pe_aggr == 'cat':
             data.x = torch.cat((x_emb,embed_pos), dim=1)
 
-        check_graphs(data, "BACKBONE INPUT")
+        data.x = self.proj(data.x)
+
+        # check_graphs(data, "BACKBONE INPUT")
         
         data.x = self.blockGT0(data.x, data.batch)
 
-        check_graphs(data, "AFTER BLOCK 0")
+        # check_graphs(data, "AFTER BLOCK 0")
 
         for i in range(self.num_blocks):
             data = self.block_dagt[i](data)
-            check_graphs(data, f"AFTER BLOCK {i+1}")
+            # check_graphs(data, f"AFTER BLOCK {i+1}")
 
         data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
 
