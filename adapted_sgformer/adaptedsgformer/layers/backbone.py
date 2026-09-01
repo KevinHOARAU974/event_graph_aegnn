@@ -34,6 +34,7 @@ class BackboneGT(nn.Module):
                     dropout_ff = 0.1,
                     norm_func = 'layer',
                     num_scales = 1,
+                    pe = True,
                     args_gr = None,
                     ): 
     
@@ -81,6 +82,8 @@ class BackboneGT(nn.Module):
             self.events_to_graph = EV_TGN(**args_gr)
 
             self.hidden_channels_list = hidden_channels_list
+
+            self.pe = pe
             
             if self.pe_aggr == 'add':
                 assert in_channels % 3 == 0
@@ -102,6 +105,7 @@ class BackboneGT(nn.Module):
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
                                                 voxel_size=self.poolings[i],
+                                                pe=pe,
                                                 pe_dim=pe_dim,
                                                 pe_aggr=pe_aggr,
                                                 encoding_periods=encoding_periods,
@@ -118,6 +122,7 @@ class BackboneGT(nn.Module):
             self.block_dagt.append(BlockDectectGT(hidden_channels_list[-2],
                                                             hidden_channels_list[-1],
                                                             voxel_size=self.poolings[-1],
+                                                            pe=pe,
                                                             pe_dim=pe_dim,
                                                             pe_aggr=pe_aggr,
                                                             encoding_periods=encoding_periods,
@@ -138,19 +143,24 @@ class BackboneGT(nn.Module):
         check_graphs(data, "Après ev_to_gr")
 
         #Embedding
-
-        embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
-        ], dim=1)
-
-        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
-
         x_emb = self.x_embedding(data.x.long()).squeeze(1)
 
-        if self.pe_aggr == 'add':
-            data.x = x_emb + embed_pos
-        elif self.pe_aggr == 'cat':
-            data.x = torch.cat((x_emb,embed_pos), dim=1)
+        if self.pe:
+
+            embed_pos = torch.stack([
+                embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+            ], dim=1)
+
+            embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+
+            if self.pe_aggr == 'add':
+                data.x = x_emb + embed_pos
+            elif self.pe_aggr == 'cat':
+                data.x = torch.cat((x_emb,embed_pos), dim=1)
+
+        else:
+
+            data.x = x_emb
 
         data.x = self.proj(data.x)
 
