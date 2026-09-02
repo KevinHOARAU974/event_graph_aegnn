@@ -82,8 +82,6 @@ class BlockDAGT(nn.Module):
                  ):
         super(BlockDAGT, self).__init__()
 
-        self.pe_dim = pe_dim
-
         self.encoding_periods = encoding_periods
 
         self.pooling = Pooling(voxel_size,
@@ -95,9 +93,11 @@ class BlockDAGT(nn.Module):
         self.factors = factors
 
         if self.pe_aggr == "add":
-            assert in_channels == pe_dim
+            # assert in_channels == pe_dim
+            self.pe_dim = in_channels
             self.in_gt = in_channels
         elif self.pe_aggr == "cat":
+            self.pe_dim = pe_dim
             self.in_gt = in_channels + pe_dim
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
@@ -157,7 +157,8 @@ class BlockDectectGT(nn.Module):
         self.factors = factors #Multiplicative Factors for each channels of positions
 
         if self.pe_aggr == "add":
-            assert in_channels == pe_dim
+            # assert in_channels == pe_dim
+            self.pe_dim = in_channels
             self.in_gt = in_channels
         elif self.pe_aggr == "cat":
             self.in_gt = in_channels + pe_dim

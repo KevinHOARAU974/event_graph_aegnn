@@ -66,7 +66,7 @@ class BackboneGT(nn.Module):
             self.strides = torch.ceil(self.poolings[-2:,1] * height).numpy().astype("int32").tolist()
             self.strides = self.strides[-self.num_scales:]
             
-            self.pe_dim = pe_dim
+            
             self.encoding_periods = encoding_periods
             self.factors = factors
     
@@ -83,8 +83,11 @@ class BackboneGT(nn.Module):
             self.hidden_channels_list = hidden_channels_list
             
             if self.pe_aggr == 'add':
-                pass
+                assert in_channels % 3 == 0
+                self.pe_dim = in_channels
             elif self.pe_aggr == 'cat':
+                assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
+                self.pe_dim = pe_dim
                 in_channels += pe_dim
     
             self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
@@ -97,7 +100,7 @@ class BackboneGT(nn.Module):
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
                                                 voxel_size=self.poolings[i],
-                                                pe_dim=pe_dim,
+                                                pe_dim=self.pe_dim,
                                                 pe_aggr=pe_aggr,
                                                 encoding_periods=encoding_periods,
                                                 factors= factors,
