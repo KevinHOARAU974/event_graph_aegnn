@@ -175,7 +175,7 @@ class Avg_voxel_pooling(nn.Module):
 
 class Pooling2(nn.Module):
 
-    def __init__(self, size: List[float], width, height, transform: Callable[[Data, ], Data], aggr: str = 'max', keep_temporal_ordering=False, dim=2, self_loop=False, in_channels=-1):
+    def __init__(self, size: List[float], width, height, transform: Callable[[Data, ], Data], aggr: str = 'max', keep_temporal_ordering=False, dim=2, self_loop=False, in_channels=-1, normalisation=False):
         super(Pooling2, self).__init__()
         assert aggr in ['mean', 'max']
         self.aggr = aggr
@@ -195,7 +195,7 @@ class Pooling2(nn.Module):
         self.self_loop = self_loop
 
         self.bn = None
-        if in_channels > 0:
+        if normalisation > 0:
             self.bn = BatchNormData(in_channels)
 
     # @property
