@@ -22,11 +22,11 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    hidden_channels_list: [36, 48, 66, 66, 66]
+    hidden_channels_list: [32, 48, 64, 64, 64]
     last_voxel_div: '5x7'
-    final_size: 16
+    # final_size: 16
     pe_dim: 12
-    pe_aggr: 'add'
+    pe_aggr: 'cat'
     pool_aggr: 'max'
     keep_temporal_ordering: False
     self_loop: False

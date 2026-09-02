@@ -94,8 +94,6 @@ class BlockDAGT(nn.Module):
 
         self.factors = factors
 
-        
-
         if self.pe_aggr == "add":
             assert in_channels == pe_dim
             self.in_gt = in_channels
@@ -114,7 +112,6 @@ class BlockDAGT(nn.Module):
 
         data = self.pooling(batch)
 
-        
         # factors = [1, 1, 1e8]
         embed_pos = torch.stack([
             embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
@@ -137,7 +134,6 @@ class BlockDectectGT(nn.Module):
     def __init__(self,
                     in_channels=32,
                     out_channels=32,
-                    pe = True,
                     pe_dim=12,
                     pe_aggr='cat',
                     voxel_size=[1,1],
@@ -160,8 +156,6 @@ class BlockDectectGT(nn.Module):
 
         self.factors = factors #Multiplicative Factors for each channels of positions
 
-        self.pe = pe
-
         if self.pe_aggr == "add":
             assert in_channels == pe_dim
             self.in_gt = in_channels
@@ -180,17 +174,16 @@ class BlockDectectGT(nn.Module):
 
         data = self.pooling(batch)
 
-        if self.pe:
-            embed_pos = torch.stack([
-                embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
-            ], dim=1)
+        embed_pos = torch.stack([
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+        ], dim=1)
 
-            embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
-            if self.pe_aggr == "add":
-                data.x += embed_pos
-            elif self.pe_aggr == "cat":
-                data.x = torch.cat((data.x,embed_pos), dim=1)
+        if self.pe_aggr == "add":
+            data.x += embed_pos
+        elif self.pe_aggr == "cat":
+            data.x = torch.cat((data.x,embed_pos), dim=1)
 
         data.x = self.blockGT(data.x, data.batch)
 
