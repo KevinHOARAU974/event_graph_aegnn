@@ -241,7 +241,7 @@ class Pooling2(nn.Module):
             new_data.width = data.width
 
         # round x and y coordinates to the center of the voxel grid
-        new_data.pos[:,:2] = self.round_to_pixel(new_data.pos[:,:2], wh_inv=self.wh_inv)
+        # new_data.pos[:,:2] = self.round_to_pixel(new_data.pos[:,:2], wh_inv=self.wh_inv)
 
         if self.transform is not None:
             if new_data.edge_index.numel() > 0:
