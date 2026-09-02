@@ -24,8 +24,7 @@ model_params:
     num_blocks: 4
     hidden_channels_list: [36, 48, 66, 66, 66]
     last_voxel_div: '5x7'
-    # final_size: 16
-    pe: False
+    final_size: 16
     pe_dim: 12
     pe_aggr: 'add'
     pool_aggr: 'max'
