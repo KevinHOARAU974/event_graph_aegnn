@@ -30,6 +30,7 @@ class BackboneGT(nn.Module):
                     encoding_periods=[120, 100, 50],
                     factors = [1,1,1],
                     num_heads = 1,
+                    head_aggr = "mean",
                     dropout_trans = 0.1,
                     dropout_ff = 0.1,
                     norm_func = 'layer',
@@ -47,6 +48,7 @@ class BackboneGT(nn.Module):
                         "dropout_trans": dropout_trans,
                         "dropout_ff": dropout_ff,
                         "norm_func": norm_func,
+                        "head_aggr": head_aggr,
                     }
             
             self.pooling_params = {

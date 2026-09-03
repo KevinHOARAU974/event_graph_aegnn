@@ -14,7 +14,7 @@ data_directory: "../data/"
 exp_name: "test"
 
 dataloader:  
-  batch_size : &bs 16
+  batch_size : &bs 8
   num_workers: 8
   pin_memory: True
 
@@ -32,7 +32,8 @@ model_params:
     self_loop: False
     encoding_periods: [1, 1, 1]
     factors: [1,1,1]
-    num_heads: 1
+    num_heads: 4
+    head_aggr: 'cat'
     dropout_trans: 0.1
     dropout_ff: 0.1
     norm_func: 'layer'

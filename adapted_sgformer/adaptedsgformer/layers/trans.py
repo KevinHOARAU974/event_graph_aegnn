@@ -16,6 +16,7 @@ class TransConvLayer(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
+                 head_aggr = "mean",
                  use_weight=True):
         super().__init__()
         self.Wk = nn.Linear(in_channels, out_channels * num_heads)
@@ -26,6 +27,11 @@ class TransConvLayer(nn.Module):
         self.out_channels = out_channels
         self.num_heads = num_heads
         self.use_weight = use_weight
+
+        self.head_aggr = head_aggr
+
+        if self.head_aggr == 'cat':
+            self.Wo = nn.Linear(out_channels*num_heads, out_channels)
 
     def reset_parameters(self):
         self.Wk.reset_parameters()
@@ -94,12 +100,19 @@ class TransConvLayer(nn.Module):
         
         attn_output = attn_output[mask_dense]
 
-        final_output = attn_output.mean(dim=1)
+        if self.head_aggr == "mean":
+            final_output = attn_output.mean(dim=1)
+
+        elif self.head_aggr == "cat":
+            attn_output = attn_output.reshape(attn_output.size(0), self.num_heads * self.out_channels)
+            final_output = self.Wo(attn_output)
+            
 
         if output_attn:
             return final_output, attention
         else:
             return final_output
+
 
 class TransConv(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_layers=2, num_heads=1,

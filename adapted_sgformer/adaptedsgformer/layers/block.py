@@ -20,6 +20,7 @@ class BlockGT(nn.Module):
                  dropout_trans = 0.1,
                  dropout_ff = 0.1,
                  norm_func = 'layer',
+                 head_aggr = 'mean',
                  ):
         super(BlockGT, self).__init__()
 
@@ -34,7 +35,7 @@ class BlockGT(nn.Module):
             self.proj = nn.Identity()
 
         self.norm1 = norm(in_channels) 
-        self.trans = TransConvLayer(in_channels, out_channels, num_heads)
+        self.trans = TransConvLayer(in_channels, out_channels, num_heads, head_aggr=head_aggr)
         self.dropout1 = nn.Dropout(dropout_trans)
 
         self.norm2 = norm(out_channels)
