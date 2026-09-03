@@ -164,15 +164,20 @@ class BlockDectectGT(nn.Module):
 
         if self.pe_aggr == "add":
             # assert in_channels == pe_dim
+            assert in_channels % 3 == 0
             self.pe_dim = in_channels
             self.in_gt = in_channels
+            self.proj = nn.Identity(self.in_gt)
         elif self.pe_aggr == "cat":
+            assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
             self.in_gt = in_channels + pe_dim
+            self.proj = nn.Linear(self.in_gt, in_channels)
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
 
+
         self.blockGT = BlockGT(
-            self.in_gt,
+            in_channels,
             out_channels,
             # head_aggr=head_aggr,
             **blockGT_params
@@ -192,6 +197,8 @@ class BlockDectectGT(nn.Module):
             data.x += embed_pos
         elif self.pe_aggr == "cat":
             data.x = torch.cat((data.x,embed_pos), dim=1)
+
+        data.x = self.proj(data.x)
 
         data.x = self.blockGT(data.x, data.batch)
 

@@ -87,10 +87,13 @@ class BackboneGT(nn.Module):
             if self.pe_aggr == 'add':
                 assert in_channels % 3 == 0
                 self.pe_dim = in_channels
+                self.in_proj = in_channels
+                self.proj = nn.Identity(self.in_proj)
             elif self.pe_aggr == 'cat':
                 assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
                 self.pe_dim = pe_dim
-                in_channels += pe_dim
+                self.in_proj = in_channels + pe_dim
+                self.proj = nn.Linear(self.in_proj, in_channels)
     
             self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
     
@@ -153,6 +156,8 @@ class BackboneGT(nn.Module):
             data.x = torch.cat((x_emb,embed_pos), dim=1)
 
         check_graphs(data, "BACKBONE INPUT")
+
+        data.x = self.proj(data.x)
         
         data.x = self.blockGT0(data.x, data.batch)
 
