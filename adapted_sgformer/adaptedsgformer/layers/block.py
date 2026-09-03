@@ -8,7 +8,7 @@ from torch import Tensor
 from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2
-from adaptedsgformer.layers.trans import TransConvLayer
+from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead
 from adaptedsgformer.utils import embed_1D_scalar
 
 
@@ -35,7 +35,11 @@ class BlockGT(nn.Module):
             self.proj = nn.Identity()
 
         self.norm1 = norm(in_channels) 
-        self.trans = TransConvLayer(in_channels, out_channels, num_heads, head_aggr=head_aggr)
+
+        if head_aggr == 'mean':
+            self.trans = TransConvLayer(in_channels, out_channels, num_heads)
+        elif head_aggr == 'cat':
+            self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads)
         self.dropout1 = nn.Dropout(dropout_trans)
 
         self.norm2 = norm(out_channels)
@@ -140,6 +144,7 @@ class BlockDectectGT(nn.Module):
                     voxel_size=[1,1],
                     encoding_periods=[120, 100, 50],
                     factors = [1, 1, 1],
+                    head_aggr='mean',
                     pooling_params = None,
                     blockGT_params = None,
                     ):
@@ -169,6 +174,7 @@ class BlockDectectGT(nn.Module):
         self.blockGT = BlockGT(
             self.in_gt,
             out_channels,
+            # head_aggr=head_aggr,
             **blockGT_params
         )
     

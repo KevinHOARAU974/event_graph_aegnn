@@ -16,7 +16,6 @@ class TransConvLayer(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
-                 head_aggr = "mean",
                  use_weight=True):
         super().__init__()
         self.Wk = nn.Linear(in_channels, out_channels * num_heads)
@@ -27,11 +26,6 @@ class TransConvLayer(nn.Module):
         self.out_channels = out_channels
         self.num_heads = num_heads
         self.use_weight = use_weight
-
-        self.head_aggr = head_aggr
-
-        if self.head_aggr == 'cat':
-            self.Wo = nn.Linear(out_channels*num_heads, out_channels)
 
     def reset_parameters(self):
         self.Wk.reset_parameters()
@@ -100,18 +94,117 @@ class TransConvLayer(nn.Module):
         
         attn_output = attn_output[mask_dense]
 
-        if self.head_aggr == "mean":
-            final_output = attn_output.mean(dim=1)
+        final_output = attn_output.mean(dim=1)
 
-        elif self.head_aggr == "cat":
-            attn_output = attn_output.reshape(attn_output.size(0), self.num_heads * self.out_channels)
-            final_output = self.Wo(attn_output)
+        if output_attn:
+            return final_output, attention
+        else:
+            return final_output
+
+
+
+class TransLayerMultiHead(nn.Module):
+    '''
+    transformer with fast attention
+    '''
+
+    def __init__(self, in_channels,
+                 out_channels,
+                 num_heads,
+                 use_weight=True):
+        super().__init__()
+
+        assert out_channels % num_heads == 0
+        self.head_dim = out_channels // num_heads
+
+
+        self.Wk = nn.Linear(in_channels, out_channels)
+        self.Wq = nn.Linear(in_channels, out_channels)
+        if use_weight:
+            self.Wv = nn.Linear(in_channels, out_channels)
+
+        self.out_channels = out_channels
+        self.num_heads = num_heads
+        self.use_weight = use_weight
+
+        self.Wo = nn.Linear(out_channels, out_channels)
+
+    def reset_parameters(self):
+        self.Wk.reset_parameters()
+        self.Wq.reset_parameters()
+        if self.use_weight:
+            self.Wv.reset_parameters()
+
+    def forward(self, input : Tensor, batch : Tensor, output_attn=False):
+        # feature transformation
+
+        #B : Batch size
+        #Nmax : number of nodes of the largest graph in the batch
+        #H : Number of Heads
+        #I : Input size
+        #M : Output size
+
+        # Groupe by graph in order to have global attention by graph in batch
+        x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
+        
+        # batch_size = len(batch.unique())
+        batch_size = x.size(0)
+
+        qs = self.Wq(x).reshape(batch_size, -1, self.num_heads, self.head_dim) 
+        ks = self.Wk(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+
+        if self.use_weight:
+            vs = self.Wv(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+        else:
+            vs = x.reshape(batch_size, -1, 1, self.out_channels)
+
+        #Set to zeros padding elements in order that they not contribute to attention
+        qs[~mask_dense] = 0.0 
+        ks[~mask_dense] = 0.0
+        vs[~mask_dense] = 0.0
+
+        # normalize input
+        # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M]
+        # ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M]
+
+        qs = F.normalize(qs, p=2, dim=-1, eps=1e-6)
+        ks = F.normalize(ks, p=2, dim=-1, eps=1e-6)
+
+        N = mask_dense.sum(dim=1) # [B] Number of nodes in each graph 
+
+        # numerator
+        kvs = torch.einsum("blhm,blhd->bhmd", ks, vs)
+        attention_num = torch.einsum("bnhm,bhmd->bnhd", qs, kvs)  # [B, Nmax, H, D]
+        attention_num += N.view(batch_size, 1, 1, 1) * vs
+
+        # denominator
+        all_ones = torch.ones([ks.shape[1]]).to(ks.device)
+        ks_sum = torch.einsum("blhm,l->bhm", ks, all_ones)
+        attention_normalizer = torch.einsum("bnhm,bhm->bnh", qs, ks_sum)  # [B, Nmax, H]
+
+        # attentive aggregated results
+        attention_normalizer = torch.unsqueeze(
+            attention_normalizer, len(attention_normalizer.shape))  # [B, Nmax, H, 1]
+        attention_normalizer += torch.ones_like(attention_normalizer) * N.view(batch_size, 1, 1, 1)
+        attn_output = attention_num / attention_normalizer  # [B,Nmax, H, D]
+
+        # compute attention for visualization if needed
+        if output_attn:
+            attention = torch.einsum("bnhm,blhm->bnlh", qs, ks).mean(dim=-1)  # [Nmax, Nmax]
+            normalizer = attention_normalizer.squeeze(dim=-1).mean(dim=-1, keepdims=True)  # [Nmax,1]
+            attention = attention / normalizer
+        
+        attn_output = attn_output[mask_dense]
+
+        attn_output = attn_output.reshape(attn_output.size(0), self.out_channels)
+        final_output = self.Wo(attn_output)
             
 
         if output_attn:
             return final_output, attention
         else:
             return final_output
+
 
 
 class TransConv(nn.Module):
