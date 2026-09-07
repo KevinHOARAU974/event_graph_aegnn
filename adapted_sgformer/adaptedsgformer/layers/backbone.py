@@ -5,7 +5,7 @@ import torch_geometric.transforms as T
 
 from torch_geometric.data import Batch
 
-from dagr.model.networks.net import compute_pooling_at_each_layer
+from adaptedsgformer.utils import compute_pooling_at_each_layer
 
 from adaptedsgformer.layers.block import BlockDectectGT, BlockGT
 from adaptedsgformer.layers.ev_to_gr import EV_TGN

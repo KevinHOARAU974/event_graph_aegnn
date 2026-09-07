@@ -32,7 +32,7 @@ def compute_pooling_at_each_layer(pooling_dim_at_output, num_layers):
     pooling_base = torch.tensor([px, py])
     poolings = []
     for i in range(num_layers):
-        pooling = pooling_base * 2 ** (3 - i)
+        pooling = pooling_base * 2 ** (num_layers - 1 - i)
         poolings.append(pooling)
     poolings = torch.stack(poolings)
     return poolings
@@ -62,6 +62,7 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
     self.dense.zero_()
 
     dense = self.dense[:B] if B < self.dense.shape[0] else self.dense
+    
     dense[batch.long(), :, est_y, est_x] = x
 
     return dense
