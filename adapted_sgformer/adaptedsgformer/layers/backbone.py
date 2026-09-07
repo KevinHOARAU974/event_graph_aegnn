@@ -17,6 +17,7 @@ class BackboneGT(nn.Module):
     def __init__(self, 
                     in_channels=24,
                     num_blocks=4,
+                    num_linear_attn_block=3,
                     hidden_channels_list=[32, 48, 64, 64, 64],
                     last_voxel_div ='5x7', #voxel division of the last DAGT block
                     final_size = 16, # Final size of pooling
@@ -101,8 +102,26 @@ class BackboneGT(nn.Module):
             self.num_blocks = num_blocks
             self.block_dagt = nn.ModuleList()
     
-            for i in range(self.num_blocks-1):
+            #Num linear attention block
+            for i in range(num_linear_attn_block):
     
+                self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
+                                                hidden_channels_list[i+1],
+                                                voxel_size=self.poolings[i],
+                                                pe_dim=self.pe_dim,
+                                                pe_aggr=pe_aggr,
+                                                encoding_periods=encoding_periods,
+                                                factors= factors,
+                                                pooling_params=self.pooling_params,
+                                                blockGT_params=self.block_gt_params)
+                )
+
+            self.block_gt_params["attn_block_type"] = "softmax"
+
+            #Num softmax attention block
+
+            for i in range(num_linear_attn_block, self.num_blocks-1):
+            
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
                                                 voxel_size=self.poolings[i],

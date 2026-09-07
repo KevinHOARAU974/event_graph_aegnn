@@ -22,6 +22,7 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
+    num_linear_attn_block: 2
     hidden_channels_list: [36, 48, 64, 64, 64]
     last_voxel_div: '5x7'
     # final_size: 16
