@@ -164,8 +164,8 @@ class TransLayerMultiHead(nn.Module):
         vs[~mask_dense] = 0.0
 
         # normalize input
-        # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M]
-        # ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M]
+        # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M/H]
+        # ks = ks / torch.norm(ks, p=2)  # [B, Nmax, H, M/H]
 
         qs = F.normalize(qs, p=2, dim=-1, eps=1e-6)
         ks = F.normalize(ks, p=2, dim=-1, eps=1e-6)
@@ -204,6 +204,68 @@ class TransLayerMultiHead(nn.Module):
             return final_output, attention
         else:
             return final_output
+
+
+class SoftmaxTrans(nn.Module):
+
+    def __init__(self, in_channels,
+                     out_channels,
+                     num_heads):
+        
+        super().__init__()
+
+        assert out_channels % num_heads == 0
+        self.head_dim = out_channels // num_heads
+
+        self.Wk = nn.Linear(in_channels, out_channels)
+        self.Wq = nn.Linear(in_channels, out_channels)
+        self.Wv = nn.Linear(in_channels, out_channels)
+
+        self.out_channels = out_channels
+        self.num_heads = num_heads
+
+        self.scale = self.head_dim ** -0.5
+
+        self.Wo = nn.Linear(out_channels, out_channels)
+
+    def forward(self, input : Tensor, batch : Tensor,):
+
+        #B : Batch size
+        #Nmax : number of nodes of the largest graph in the batch
+        #H : Number of Heads
+        #I : Input size
+        #M : Output size
+
+        # Groupe by graph in order to have global attention by graph in batch
+        x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
+        
+        # batch_size = len(batch.unique())
+        batch_size = x.size(0)
+
+        qs = self.Wq(x).reshape(batch_size, -1, self.num_heads, self.head_dim) 
+        ks = self.Wk(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+
+        vs = self.Wv(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+
+        #QK^T
+        attn = torch.einsum("bnhm, blhm -> bhnl", qs, ks)
+        attn *= self.scale
+
+        ##Set padding values to -inf before softmax
+        attn = attn.masked_fill(~mask_dense[:, None, None, :],float("-inf"))
+
+        attn = F.softmax(attn, dim=-1)
+
+        #AV
+
+        out = torch.einsum("bhnj, bjhd -> bnhd", attn, vs)
+        out = out[mask_dense]
+        out = out.reshape(out.size(0), self.out_channels)
+
+        out = self.Wo(out)
+
+        return out
+        
 
 
 

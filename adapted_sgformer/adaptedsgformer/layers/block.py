@@ -8,7 +8,7 @@ from torch import Tensor
 from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2
-from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead
+from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans
 from adaptedsgformer.utils import embed_1D_scalar
 
 
@@ -20,7 +20,7 @@ class BlockGT(nn.Module):
                  dropout_trans = 0.1,
                  dropout_ff = 0.1,
                  norm_func = 'layer',
-                 head_aggr = 'mean',
+                 attn_block_type = 'mean',
                  ):
         super(BlockGT, self).__init__()
 
@@ -36,10 +36,13 @@ class BlockGT(nn.Module):
 
         self.norm1 = norm(in_channels) 
 
-        if head_aggr == 'mean':
+        if attn_block_type == 'mean':
             self.trans = TransConvLayer(in_channels, out_channels, num_heads)
-        elif head_aggr == 'cat':
+        elif attn_block_type == 'cat':
             self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads)
+        elif attn_block_type == 'softmax':
+            self.trans = SoftmaxTrans(in_channels, out_channels, num_heads)
+        
         self.dropout1 = nn.Dropout(dropout_trans)
 
         self.norm2 = norm(out_channels)
@@ -144,7 +147,7 @@ class BlockDectectGT(nn.Module):
                     voxel_size=[1,1],
                     encoding_periods=[120, 100, 50],
                     factors = [1, 1, 1],
-                    head_aggr='mean',
+                    # attn_type_block='mean',
                     pooling_params = None,
                     blockGT_params = None,
                     ):

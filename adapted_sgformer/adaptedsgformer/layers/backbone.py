@@ -30,7 +30,8 @@ class BackboneGT(nn.Module):
                     encoding_periods=[120, 100, 50],
                     factors = [1,1,1],
                     num_heads = 1,
-                    head_aggr = "mean",
+                    attn_block_type = "mean",
+                    last_attn_block_type = "mean",
                     dropout_trans = 0.1,
                     dropout_ff = 0.1,
                     norm_func = 'layer',
@@ -48,7 +49,7 @@ class BackboneGT(nn.Module):
                         "dropout_trans": dropout_trans,
                         "dropout_ff": dropout_ff,
                         "norm_func": norm_func,
-                        "head_aggr": head_aggr,
+                        "attn_block_type": attn_block_type,
                     }
             
             self.pooling_params = {
@@ -117,6 +118,8 @@ class BackboneGT(nn.Module):
 
             cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[-1])
             self.pooling_params['transform'] = cart
+
+            self.block_gt_params["attn_block_type"] = last_attn_block_type
 
             self.block_dagt.append(BlockDectectGT(hidden_channels_list[-2],
                                                             hidden_channels_list[-1],
