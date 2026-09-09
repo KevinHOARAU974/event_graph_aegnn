@@ -5,7 +5,7 @@ import torch_geometric.transforms as T
 
 from torch_geometric.data import Batch
 
-from adaptedsgformer.utils import compute_pooling_at_each_layer
+from dagr.model.networks.net import compute_pooling_at_each_layer
 
 from adaptedsgformer.layers.block import BlockDectectGT, BlockGT
 from adaptedsgformer.layers.ev_to_gr import EV_TGN
@@ -177,17 +177,17 @@ class BackboneGT(nn.Module):
         elif self.pe_aggr == 'cat':
             data.x = torch.cat((x_emb,embed_pos), dim=1)
 
-        check_graphs(data, "BACKBONE INPUT")
+        # check_graphs(data, "BACKBONE INPUT")
 
         data.x = self.proj(data.x)
         
-        data.x = self.blockGT0(data.x, data.batch)
+        data.x = self.blockGT0(data)
 
-        check_graphs(data, "AFTER BLOCK 0")
+        # check_graphs(data, "AFTER BLOCK 0")
 
         for i in range(self.num_blocks):
             data = self.block_dagt[i](data)
-            check_graphs(data, f"AFTER BLOCK {i+1}")
+            # check_graphs(data, f"AFTER BLOCK {i+1}")
 
         data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
 

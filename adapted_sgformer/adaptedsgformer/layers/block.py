@@ -8,7 +8,7 @@ from torch import Tensor
 from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2
-from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans
+from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans, BiasSoftmaxTrans
 from adaptedsgformer.utils import embed_1D_scalar
 
 
@@ -42,6 +42,8 @@ class BlockGT(nn.Module):
             self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads)
         elif attn_block_type == 'softmax':
             self.trans = SoftmaxTrans(in_channels, out_channels, num_heads)
+        elif attn_block_type == 'bias':
+            self.trans = BiasSoftmaxTrans(in_channels, out_channels, num_heads)
         
         self.dropout1 = nn.Dropout(dropout_trans)
 
@@ -55,15 +57,15 @@ class BlockGT(nn.Module):
         )
 
 
-    def forward(self, x: Tensor, batch: Tensor):
+    def forward(self, batch: Batch):
 
-        x_c = self.proj(x)
+        x_c = self.proj(batch.x)
 
-        x = self.norm1(x)
-        x = self.trans(x, batch)
-        x = self.dropout1(x)
+        batch.x = self.norm1(batch.x)
+        batch.x = self.trans(batch)
+        batch.x = self.dropout1(batch.x)
 
-        x = x + x_c
+        x = batch.x + x_c
         
         x_c = x 
 
@@ -203,6 +205,6 @@ class BlockDectectGT(nn.Module):
 
         data.x = self.proj(data.x)
 
-        data.x = self.blockGT(data.x, data.batch)
+        data.x = self.blockGT(data)
 
         return data

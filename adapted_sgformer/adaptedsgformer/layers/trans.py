@@ -135,7 +135,7 @@ class TransLayerMultiHead(nn.Module):
         if self.use_weight:
             self.Wv.reset_parameters()
 
-    def forward(self, input : Tensor, batch : Tensor, output_attn=False):
+    def forward(self, batch: Batch, output_attn=False):
         # feature transformation
 
         #B : Batch size
@@ -145,7 +145,7 @@ class TransLayerMultiHead(nn.Module):
         #M : Output size
 
         # Groupe by graph in order to have global attention by graph in batch
-        x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
+        x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
         
         # batch_size = len(batch.unique())
         batch_size = x.size(0)
@@ -228,7 +228,7 @@ class SoftmaxTrans(nn.Module):
 
         self.Wo = nn.Linear(out_channels, out_channels)
 
-    def forward(self, input : Tensor, batch : Tensor,):
+    def forward(self, batch : Batch):
 
         #B : Batch size
         #Nmax : number of nodes of the largest graph in the batch
@@ -237,7 +237,7 @@ class SoftmaxTrans(nn.Module):
         #M : Output size
 
         # Groupe by graph in order to have global attention by graph in batch
-        x, mask_dense = to_dense_batch(input, batch) #[B, Nmax, I]
+        x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
         
         # batch_size = len(batch.unique())
         batch_size = x.size(0)
@@ -259,6 +259,108 @@ class SoftmaxTrans(nn.Module):
         #AV
 
         out = torch.einsum("bhnj, bjhd -> bnhd", attn, vs)
+        out = out[mask_dense]
+        out = out.reshape(out.size(0), self.out_channels)
+
+        out = self.Wo(out)
+
+        return out
+
+class BiasSoftmaxTrans(nn.Module):
+
+    def __init__(self, in_channels,
+                     out_channels,
+                     num_heads):
+        
+        super().__init__()
+
+        assert out_channels % num_heads == 0
+        self.head_dim = out_channels // num_heads
+        self.num_heads = num_heads
+        self.out_channels = out_channels
+
+        self.Wk = nn.Linear(in_channels, out_channels)
+        self.Wq = nn.Linear(in_channels, out_channels)
+        self.Wv = nn.Linear(in_channels, out_channels)
+
+        self.Wa = nn.Linear(3, self.num_heads) #Multiplicative bias
+        self.Wb = nn.Linear(3, self.num_heads) #Additive attention bias
+        self.Wc = nn.Linear(3, self.out_channels) #Additive values bias
+
+        self.pa = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
+        self.pb = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
+        self.pc = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
+
+        self.scale = self.head_dim ** -0.5
+
+        self.Wo = nn.Linear(out_channels, out_channels)
+
+    def forward(self, batch: Batch):
+
+        #B : Batch size
+        #Nmax : number of nodes of the largest graph in the batch
+        #H : Number of Heads
+        #I : Input size
+        #M : Output size
+
+        # Groupe by graph in order to have global attention by graph in batch
+        x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
+        
+        # batch_size = len(batch.unique())
+        batch_size, Nmax, _ = x.size()
+
+        qs = self.Wq(x).reshape(batch_size, -1, self.num_heads, self.head_dim) 
+        ks = self.Wk(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+        vs = self.Wv(x).reshape(batch_size, -1, self.num_heads, self.head_dim)
+
+        #QK^T
+        attn = torch.einsum("bnhm, blhm -> bhnl", qs, ks)
+
+        #Compute attention bias with edge
+        src = batch.edge_index[0,:]
+        dst = batch.edge_index[1,:]
+
+        batch_edge = batch.batch[src]
+
+        cum_sum = torch.cumsum(batch.batch.unique(return_counts=True)[1], dim=0)
+
+        offset = torch.cat([torch.zeros(1, dtype=cum_sum.dtype, device=cum_sum.device), cum_sum], dim=0)[:batch.num_graphs]
+
+        offset = offset[batch_edge]
+
+        # offset = batch.ptr[:-1][batch_edge]
+
+        src_loc = src - offset
+        dst_loc = dst - offset
+
+        mul_bias = self.Wa(batch.edge_attr)
+        add_att_bias = self.Wb(batch.edge_attr)
+        add_val_bias = self.Wc(batch.edge_attr).reshape(-1, self.num_heads, self.head_dim)
+
+        mul_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=mul_bias.device, dtype=mul_bias.dtype) * self.Wa(self.pa).view(1, self.num_heads, 1, 1)
+        add_att_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=add_att_bias.device, dtype=add_att_bias.dtype) * self.Wb(self.pb).view(1, self.num_heads, 1, 1)
+        add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, self.head_dim)
+
+        mul_bias_dense[batch_edge, :, dst_loc, src_loc] = mul_bias
+        add_att_bias_dense[batch_edge, :, dst_loc, src_loc] = add_att_bias
+        add_val_bias_dense[batch_edge, :, dst_loc, src_loc, :] = add_val_bias 
+
+        attn_bias  = attn * mul_bias_dense
+        attn_bias *= self.scale
+        attn_bias += add_att_bias_dense
+
+        ##Set padding values to -inf before softmax
+        attn_bias = attn_bias.masked_fill(~mask_dense[:, None, None, :],float("-inf"))
+        attn_bias = F.softmax(attn_bias, dim=-1)
+
+        #out V
+        out_v = torch.einsum("bhnj, bjhd -> bnhd", attn_bias, vs)
+
+        #out bias edge
+        out_edge = torch.einsum("bhnj,bhnjd->bnhd", attn_bias, add_val_bias_dense)
+
+        out = out_v + out_edge
+
         out = out[mask_dense]
         out = out.reshape(out.size(0), self.out_channels)
 
@@ -343,3 +445,4 @@ class TransConv(nn.Module):
                 x = self.activation(x)
             layer_.append(x)
         return torch.stack(attentions, dim=0)  # [layer num, N, N]
+
