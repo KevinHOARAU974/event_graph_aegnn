@@ -156,11 +156,11 @@ class BackboneGT(nn.Module):
         device = next(self.parameters()).device
         data = batch.clone().to(device)
 
-        check_graphs(batch, "DataLoader")
+        # check_graphs(batch, "DataLoader")
 
         data = self.events_to_graph(data)
 
-        check_graphs(data, "Après ev_to_gr")
+        # check_graphs(data, "Après ev_to_gr")
 
         #Embedding
 

@@ -287,9 +287,9 @@ class BiasSoftmaxTrans(nn.Module):
         self.Wb = nn.Linear(3, self.num_heads) #Additive attention bias
         self.Wc = nn.Linear(3, self.out_channels) #Additive values bias
 
-        self.pa = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
-        self.pb = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
-        self.pc = nn.Parameter(torch.tensor([1.0, 1.0, 1.0])) #Learnable parameter for far events
+        self.pa = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+        self.pb = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+        self.pc = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
 
         self.scale = self.head_dim ** -0.5
 
@@ -339,7 +339,7 @@ class BiasSoftmaxTrans(nn.Module):
 
         mul_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=mul_bias.device, dtype=mul_bias.dtype) * self.Wa(self.pa).view(1, self.num_heads, 1, 1)
         add_att_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=add_att_bias.device, dtype=add_att_bias.dtype) * self.Wb(self.pb).view(1, self.num_heads, 1, 1)
-        add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, self.head_dim)
+        add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, 1, self.head_dim)
 
         mul_bias_dense[batch_edge, :, dst_loc, src_loc] = mul_bias
         add_att_bias_dense[batch_edge, :, dst_loc, src_loc] = add_att_bias
