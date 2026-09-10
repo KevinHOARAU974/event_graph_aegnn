@@ -5,7 +5,8 @@ from torch_geometric.data import Batch
 
 from torch import Tensor
 
-from torch_geometric.nn.norm import BatchNorm, LayerNorm
+from torch_geometric.nn.norm import BatchNorm
+from torch.nn import LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2
 from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans, BiasSoftmaxTrans
