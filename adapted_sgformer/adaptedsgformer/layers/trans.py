@@ -270,7 +270,8 @@ class BiasSoftmaxTrans(nn.Module):
 
     def __init__(self, in_channels,
                      out_channels,
-                     num_heads):
+                     num_heads,
+                     dropout=0.0):
         
         super().__init__()
 
@@ -290,6 +291,8 @@ class BiasSoftmaxTrans(nn.Module):
         self.pa = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
         self.pb = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
         self.pc = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+
+        self.dropout = nn.Dropout(dropout)
 
         self.scale = self.head_dim ** -0.5
 
@@ -352,6 +355,8 @@ class BiasSoftmaxTrans(nn.Module):
         ##Set padding values to -inf before softmax
         attn_bias = attn_bias.masked_fill(~mask_dense[:, None, None, :],float("-inf"))
         attn_bias = F.softmax(attn_bias, dim=-1)
+
+        attn_bias = self.dropout(attn_bias)
 
         #out V
         out_v = torch.einsum("bhnj, bjhd -> bnhd", attn_bias, vs)

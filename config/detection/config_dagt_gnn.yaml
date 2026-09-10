@@ -34,6 +34,7 @@ model_params:
     encoding_periods: [1, 1, 1]
     factors: [1,1,1]
     num_heads: 4
+    dropout_attn: 0.1
     dropout_trans: 0.1
     dropout_ff: 0.1
     norm_func: 'layer'

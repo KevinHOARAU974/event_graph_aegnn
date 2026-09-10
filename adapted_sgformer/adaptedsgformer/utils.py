@@ -51,10 +51,18 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
         B = batch.max().item() + 1
         self.batch_size = B
 
-    if not hasattr(self, "dense"):
-        W, H = (1 / pooling[:2] + 1e-3).long()
-        C = x.shape[-1]
-        self.dense = torch.zeros(size=(B, C, H, W), dtype=x.dtype, device=x.device)
+    
+    W, H = (1 / pooling[:2] + 1e-3).long()
+    C = x.shape[-1]
+
+    if (
+        not hasattr(self, "dense")
+        or self.dense.shape[0] < B
+        or self.dense.shape[1:] != (C, H, W)
+        or self.dense.device != x.device
+        or self.dense.dtype != x.dtype
+    ):
+        self.dense = x.new_zeros((B, C, H, W))
 
     est_x, est_y = (pos[:, :2] / pooling[:2]).t().long()
 

@@ -31,8 +31,9 @@ class BackboneGT(nn.Module):
                     encoding_periods=[120, 100, 50],
                     factors = [1,1,1],
                     num_heads = 1,
-                    dropout_trans = 0.1,
-                    dropout_ff = 0.1,
+                    dropout_attn = 0.0,
+                    dropout_trans = 0.0,
+                    dropout_ff = 0.0,
                     norm_func = 'layer',
                     num_scales = 1,
                     args_gr = None,
@@ -122,6 +123,7 @@ class BackboneGT(nn.Module):
 
                 if attn_type_block_list[i+1] == 'bias':
 
+                    block_gt_params["dropout_attn"] = dropout_attn
                     cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
                     pooling_params['transform'] = cart
 
