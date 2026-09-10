@@ -17,8 +17,8 @@ class BackboneGT(nn.Module):
     def __init__(self, 
                     in_channels=24,
                     num_blocks=4,
-                    num_linear_attn_block=3,
                     hidden_channels_list=[32, 48, 64, 64, 64],
+                    attn_type_block_list=['cat','cat', 'cat', 'cat', 'bias'],
                     last_voxel_div ='5x7', #voxel division of the last DAGT block
                     final_size = 16, # Final size of pooling
                     pe_dim=12,
@@ -31,8 +31,6 @@ class BackboneGT(nn.Module):
                     encoding_periods=[120, 100, 50],
                     factors = [1,1,1],
                     num_heads = 1,
-                    attn_block_type = "mean",
-                    last_attn_block_type = "mean",
                     dropout_trans = 0.1,
                     dropout_ff = 0.1,
                     norm_func = 'layer',
@@ -44,14 +42,7 @@ class BackboneGT(nn.Module):
     
             assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
             assert len(hidden_channels_list) == num_blocks+1, f'Length of hidden_channels must be num_blocks+1'
-    
-            self.block_gt_params={
-                        "num_heads": num_heads,
-                        "dropout_trans": dropout_trans,
-                        "dropout_ff": dropout_ff,
-                        "norm_func": norm_func,
-                        "attn_block_type": attn_block_type,
-                    }
+            assert len(attn_type_block_list) == num_blocks+1, f'Length of attn_type_block must be num_blocks+1'
             
             self.pooling_params = {
                         "width": width,
@@ -96,15 +87,47 @@ class BackboneGT(nn.Module):
                 self.pe_dim = pe_dim
                 self.in_proj = in_channels + pe_dim
                 self.proj = nn.Linear(self.in_proj, in_channels)
-    
+
+            self.block_gt_params={
+                                    "num_heads": num_heads,
+                                    "dropout_trans": dropout_trans,
+                                    "dropout_ff": dropout_ff,
+                                    "norm_func": norm_func,
+                                    "attn_block_type": attn_type_block_list[0],
+                                }
+
             self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
     
             self.num_blocks = num_blocks
             self.block_dagt = nn.ModuleList()
     
             #Num linear attention block
-            for i in range(num_linear_attn_block):
-    
+            for i in range(num_blocks):
+
+                block_gt_params = {"num_heads": num_heads,
+                                    "dropout_trans": dropout_trans,
+                                    "dropout_ff": dropout_ff,
+                                    "norm_func": norm_func,
+                                    "attn_block_type": attn_type_block_list[i+1],
+                                }
+
+                pooling_params = {
+                                        "width": width,
+                                        "height": height,
+                                        "aggr": pool_aggr,
+                                        "keep_temporal_ordering":keep_temporal_ordering,
+                                        "self_loop":self_loop,
+                                        "transform": None,
+                                    }
+
+                if attn_type_block_list[i+1] == 'bias':
+
+                    cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
+                    pooling_params['transform'] = cart
+
+                if i==num_blocks-1:
+                    pooling_params['aggr'] = 'mean'
+
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
                                                 voxel_size=self.poolings[i],
@@ -112,44 +135,10 @@ class BackboneGT(nn.Module):
                                                 pe_aggr=pe_aggr,
                                                 encoding_periods=encoding_periods,
                                                 factors= factors,
-                                                pooling_params=self.pooling_params,
-                                                blockGT_params=self.block_gt_params)
+                                                pooling_params=pooling_params,
+                                                blockGT_params=block_gt_params)
                 )
 
-            self.block_gt_params["attn_block_type"] = "softmax"
-
-            #Num softmax attention block
-
-            for i in range(num_linear_attn_block, self.num_blocks-1):
-            
-                self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
-                                                hidden_channels_list[i+1],
-                                                voxel_size=self.poolings[i],
-                                                pe_dim=self.pe_dim,
-                                                pe_aggr=pe_aggr,
-                                                encoding_periods=encoding_periods,
-                                                factors= factors,
-                                                pooling_params=self.pooling_params,
-                                                blockGT_params=self.block_gt_params)
-                )
-
-            self.pooling_params['aggr'] = 'mean'
-
-            cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[-1])
-            self.pooling_params['transform'] = cart
-
-            self.block_gt_params["attn_block_type"] = last_attn_block_type
-
-            self.block_dagt.append(BlockDectectGT(hidden_channels_list[-2],
-                                                            hidden_channels_list[-1],
-                                                            voxel_size=self.poolings[-1],
-                                                            pe_dim=pe_dim,
-                                                            pe_aggr=pe_aggr,
-                                                            encoding_periods=encoding_periods,
-                                                            factors= factors,
-                                                            pooling_params=self.pooling_params,
-                                                            blockGT_params=self.block_gt_params)
-                            )
         
     def forward(self, batch :Batch):
         

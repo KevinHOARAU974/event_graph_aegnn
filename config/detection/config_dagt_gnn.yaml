@@ -22,8 +22,8 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    num_linear_attn_block: 3
     hidden_channels_list: [36, 48, 64, 64, 64]
+    attn_type_block_list: ['cat','cat', 'cat', 'bias', 'bias']
     last_voxel_div: '5x7'
     # final_size: 16
     pe_dim: 12
@@ -33,9 +33,7 @@ model_params:
     self_loop: False
     encoding_periods: [1, 1, 1]
     factors: [1,1,1]
-    num_heads: 1
-    attn_block_type: 'cat'
-    last_attn_block_type : 'bias'
+    num_heads: 4
     dropout_trans: 0.1
     dropout_ff: 0.1
     norm_func: 'layer'
