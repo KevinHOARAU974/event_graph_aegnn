@@ -122,13 +122,14 @@ class BackboneGT(nn.Module):
                                     }
 
                 if attn_type_block_list[i+1] == 'bias':
-
                     block_gt_params["dropout_attn"] = dropout_attn
                     cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
                     pooling_params['transform'] = cart
 
                 if i==num_blocks-1:
                     pooling_params['aggr'] = 'mean'
+                    cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
+                    pooling_params['transform'] = cart
 
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
