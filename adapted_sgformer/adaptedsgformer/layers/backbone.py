@@ -18,7 +18,7 @@ class BackboneGT(nn.Module):
                     in_channels=24,
                     num_blocks=4,
                     hidden_channels_list=[32, 48, 64, 64, 64],
-                    attn_type_block_list=['cat','cat', 'cat', 'cat', 'bias'],
+                    attn_type_block_list=['cat', 'cat', 'cat', 'bias'],
                     last_voxel_div ='5x7', #voxel division of the last DAGT block
                     final_size = 16, # Final size of pooling
                     pe_dim=12,
@@ -43,7 +43,7 @@ class BackboneGT(nn.Module):
     
             assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
             assert len(hidden_channels_list) == num_blocks+1, f'Length of hidden_channels must be num_blocks+1'
-            assert len(attn_type_block_list) == num_blocks+1, f'Length of attn_type_block must be num_blocks+1'
+            assert len(attn_type_block_list) == num_blocks, f'Length of attn_type_block must be num_blocks+1'
             
             self.pooling_params = {
                         "width": width,
@@ -82,12 +82,13 @@ class BackboneGT(nn.Module):
                 assert in_channels % 3 == 0
                 self.pe_dim = in_channels
                 self.in_proj = in_channels
-                self.proj = nn.Identity(self.in_proj)
+                # self.proj = nn.Identity(self.in_proj)
             elif self.pe_aggr == 'cat':
                 assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
                 self.pe_dim = pe_dim
                 self.in_proj = in_channels + pe_dim
-                self.proj = nn.Linear(self.in_proj, in_channels)
+
+            self.proj = nn.Linear(self.in_proj, hidden_channels_list[0])
 
             self.block_gt_params={
                                     "num_heads": num_heads,
@@ -97,7 +98,7 @@ class BackboneGT(nn.Module):
                                     "attn_block_type": attn_type_block_list[0],
                                 }
 
-            self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
+            # self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **self.block_gt_params)
     
             self.num_blocks = num_blocks
             self.block_dagt = nn.ModuleList()
@@ -109,7 +110,7 @@ class BackboneGT(nn.Module):
                                     "dropout_trans": dropout_trans,
                                     "dropout_ff": dropout_ff,
                                     "norm_func": norm_func,
-                                    "attn_block_type": attn_type_block_list[i+1],
+                                    "attn_block_type": attn_type_block_list[i],
                                 }
 
                 pooling_params = {
@@ -121,7 +122,7 @@ class BackboneGT(nn.Module):
                                         "transform": None,
                                     }
 
-                if attn_type_block_list[i+1] == 'bias':
+                if attn_type_block_list[i] == 'bias':
                     block_gt_params["dropout_attn"] = dropout_attn
                     cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
                     pooling_params['transform'] = cart
@@ -173,7 +174,7 @@ class BackboneGT(nn.Module):
 
         data.x = self.proj(data.x)
         
-        data.x = self.blockGT0(data)
+        # data.x = self.blockGT0(data)
 
         # check_graphs(data, "AFTER BLOCK 0")
 
