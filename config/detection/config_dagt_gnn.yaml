@@ -22,8 +22,9 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
+    first_trans_block: False
     hidden_channels_list: [36, 48, 64, 64, 64]
-    attn_type_block_list: ['cat','cat', 'cat', 'bias', 'bias']
+    attn_type_block_list: ['cat', 'cat', 'bias', 'bias']
     last_voxel_div: '5x7'
     # final_size: 16
     pe_dim: 12
