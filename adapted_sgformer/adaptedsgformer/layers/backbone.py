@@ -5,7 +5,8 @@ import torch_geometric.transforms as T
 
 from torch_geometric.data import Batch
 
-from dagr.model.networks.net import compute_pooling_at_each_layer
+# from dagr.model.networks.net import compute_pooling_at_each_layer
+from adaptedsgformer.utils import compute_pooling_at_each_layer
 
 from adaptedsgformer.layers.block import BlockDectectGT, BlockGT
 from adaptedsgformer.layers.ev_to_gr import EV_TGN
@@ -20,6 +21,7 @@ class BackboneGT(nn.Module):
                     first_trans_block = True,
                     hidden_channels_list=[32, 48, 64, 64, 64],
                     attn_type_block_list=['cat','cat', 'cat', 'cat', 'bias'],
+                    pooling_type_list = ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling'],
                     last_voxel_div ='5x7', #voxel division of the last DAGT block
                     final_size = 16, # Final size of pooling
                     pe_dim=12,
@@ -48,20 +50,14 @@ class BackboneGT(nn.Module):
                 assert len(attn_type_block_list) == num_blocks+1, f'Length of attn_type_block must be num_blocks+1'
             else:
                 assert len(attn_type_block_list) == num_blocks, f'Length of attn_type_block must be num_blocks'
-
-                        
-            self.pooling_params = {
-                        "width": width,
-                        "height": height,
-                        "aggr": pool_aggr,
-                        "keep_temporal_ordering":keep_temporal_ordering,
-                        "self_loop":self_loop,
-                        "transform": None,
-                    }
+            assert len(pooling_type_list) == num_blocks, f'Length of pooling_type_list must be num_blocks'
     
             self.num_scales = num_scales
     
-            self.poolings = compute_pooling_at_each_layer(last_voxel_div, num_layers=num_blocks)
+            self.poolings, self.samplings = compute_pooling_at_each_layer(last_voxel_div, num_layers=num_blocks)
+
+            print(f'poolings: {self.poolings}')
+            print(f'samplings: {self.samplings}')
 
             max_vals_for_cartesian = 2*self.poolings[:,:2].max(-1).values
             self.strides = torch.ceil(self.poolings[-2:,1] * height).numpy().astype("int32").tolist()
@@ -128,8 +124,11 @@ class BackboneGT(nn.Module):
                                     "norm_func": norm_func,
                                     "attn_block_type": attn_type_block_list[i],
                                 }
-
-                pooling_params = {
+                
+                if pooling_type_list[i] == 'voxel_pooling':
+                    pooling_params = {  
+                                        "size": self.poolings[i],
+                                        "in_channels": hidden_channels_list[i],
                                         "width": width,
                                         "height": height,
                                         "aggr": pool_aggr,
@@ -137,6 +136,12 @@ class BackboneGT(nn.Module):
                                         "self_loop":self_loop,
                                         "transform": None,
                                     }
+                elif pooling_type_list[i] == 'uniform_sampling':
+                    pooling_params = {  
+                        "n_sample": self.samplings[i],
+                                        "transform": None,
+                                    }
+                    
 
                 if attn_type_block_list[i] == 'bias':
                     block_gt_params["dropout_attn"] = dropout_attn
@@ -144,17 +149,18 @@ class BackboneGT(nn.Module):
                     pooling_params['transform'] = cart
 
                 if i==num_blocks-1:
-                    pooling_params['aggr'] = 'mean'
+                    if pooling_type_list[i] == 'voxel_pooling':
+                        pooling_params['aggr'] = 'mean'
                     cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
-                    pooling_params['transform'] = cart
+                    pooling_params['transform'] = cart                
 
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
-                                                voxel_size=self.poolings[i],
                                                 pe_dim=self.pe_dim,
                                                 pe_aggr=pe_aggr,
                                                 encoding_periods=encoding_periods,
                                                 factors= factors,
+                                                pooling_type= pooling_type_list[i],
                                                 pooling_params=pooling_params,
                                                 blockGT_params=block_gt_params)
                 )

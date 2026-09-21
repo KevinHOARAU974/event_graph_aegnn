@@ -66,6 +66,7 @@ class GNNHead(YOLOXHead):
         self.cache = []
 
     def process_feature(self, x, stem, cls_conv, reg_conv, cls_pred, reg_pred, obj_pred, batch_size, cache):
+        
         x = stem(x)
 
         cls_feat = cls_conv(shallow_copy(x))

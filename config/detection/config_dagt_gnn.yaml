@@ -25,6 +25,7 @@ model_params:
     first_trans_block: False
     hidden_channels_list: [36, 48, 64, 64, 64]
     attn_type_block_list: ['cat', 'cat', 'bias', 'bias']
+    pooling_type_list: ['uniform_sampling', 'uniform_sampling', 'uniform_sampling', 'voxel_pooling']
     last_voxel_div: '5x7'
     # final_size: 16
     pe_dim: 12

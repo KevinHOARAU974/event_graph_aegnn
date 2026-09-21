@@ -29,13 +29,23 @@ def consecutive_cluster(src):
 
 def compute_pooling_at_each_layer(pooling_dim_at_output, num_layers):
     py, px = map(int, pooling_dim_at_output.split("x"))
-    pooling_base = torch.tensor([px, py])
+    pooling_base = torch.tensor([1.0 / px, 1.0 / py, 1.0 / 1])
+    sampling_base = torch.tensor([px, py])
     poolings = []
+    samplings = []
+
     for i in range(num_layers):
-        pooling = pooling_base * 2 ** (num_layers - 1 - i)
+        pooling = pooling_base / 2 ** (num_layers - 1 - i)
+        sampling = sampling_base * 2 ** (num_layers - 1 - i)
+        pooling[-1] = 1
+        sampling = sampling[0] * sampling[1]
         poolings.append(pooling)
+        samplings.append(sampling)
+
     poolings = torch.stack(poolings)
-    return poolings
+    samplings = torch.stack(samplings)
+
+    return poolings, samplings
 
 def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
     # if hasattr(self, "batch_size"):

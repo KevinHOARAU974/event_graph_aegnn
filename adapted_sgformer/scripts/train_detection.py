@@ -199,6 +199,7 @@ if __name__ == '__main__':
     print("init net")
     # load a dummy sample to get height, width
     model = DetectionGT(num_classes=train_dataset.num_classes, args=cfg["model_params"], height=train_dataset.height, width=train_dataset.width)
+    print(model)
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print(f"Training with {num_params} number of parameters.")
@@ -243,7 +244,6 @@ if __name__ == '__main__':
         mapcalc = run_test(val_loader, ema.ema, dry_run_steps=2, dataset=cfg["dataset"])
         mapcalc.compute()
 
-    print(model)
 
     print("starting to train")
     for epoch in range(start_epoch, cfg["max_epochs"]):

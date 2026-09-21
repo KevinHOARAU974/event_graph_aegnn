@@ -7,7 +7,7 @@ from torch import Tensor
 
 from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
-from adaptedsgformer.layers.pooling import Pooling, Pooling2
+from adaptedsgformer.layers.pooling import Pooling, Pooling2, UniformSampling
 from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans, BiasSoftmaxTrans
 from adaptedsgformer.utils import embed_1D_scalar
 
@@ -147,10 +147,10 @@ class BlockDectectGT(nn.Module):
                     out_channels=32,
                     pe_dim=12,
                     pe_aggr='cat',
-                    voxel_size=[1,1],
                     encoding_periods=[120, 100, 50],
                     factors = [1, 1, 1],
                     # attn_type_block='mean',
+                    pooling_type = "voxel_pooling",
                     pooling_params = None,
                     blockGT_params = None,
                     ):
@@ -160,9 +160,10 @@ class BlockDectectGT(nn.Module):
 
         self.encoding_periods = encoding_periods #Max period for sinusoïdal positional encoding
 
-        self.pooling = Pooling2(voxel_size,
-                                in_channels=in_channels,
-                                **pooling_params)
+        if pooling_type == "voxel_pooling":
+            self.pooling = Pooling2(**pooling_params)
+        elif pooling_type == "uniform_sampling":
+            self.pooling = UniformSampling(**pooling_params)
         
         self.pe_aggr = pe_aggr #Aggregation of PE and node features
 

@@ -11,6 +11,7 @@ from torch_geometric.nn.pool import max_pool_x, avg_pool_x,voxel_grid
 from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.nn.pool.avg_pool import _avg_pool_x
 from torch_geometric.nn.pool.pool import pool_pos
+from torch_geometric.utils import subgraph
 
 from dagr.model.layers.components import BatchNormData
 
@@ -195,7 +196,7 @@ class Pooling2(nn.Module):
         self.self_loop = self_loop
 
         self.bn = None
-        if normalisation > 0:
+        if normalisation:
             self.bn = BatchNormData(in_channels)
 
     # @property
@@ -211,7 +212,9 @@ class Pooling2(nn.Module):
             return data
 
         pos = torch.cat([data.pos, data.batch.float().view(-1,1)], dim=-1)
+
         cluster = voxel_grid(pos, batch=data.batch, size=self.voxel_size, start=self.start, end=self.end)
+
         unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
         edge_index = cluster[data.edge_index]
         if self.self_loop:
@@ -251,5 +254,51 @@ class Pooling2(nn.Module):
 
         if self.bn is not None:
             new_data = self.bn(new_data)
+
+        return new_data
+
+
+
+class UniformSampling(nn.Module):
+
+    def __init__(self, n_sample, transform: Callable[[Data, ], Data] = None):
+
+        super(UniformSampling,self).__init__()
+
+        self.n_sample = n_sample #Number of nodes after sampling
+
+        self.transform = transform
+
+    def forward(self, batch: Batch):
+
+        idx_sampled = []
+
+        for b in range(batch.num_graphs):
+
+            idx = torch.where(batch.batch == b)[0]
+
+            perm = torch.randperm(idx.numel(), device=idx.device)
+
+            idx = idx[perm[:self.n_sample]]
+
+            idx_sampled.append(idx) #index of sampled node in this graph
+
+        idx_sampled = torch.cat(idx_sampled)
+
+
+
+        x = batch.x[idx_sampled]
+        batch_idx = batch.batch[idx_sampled]
+        pos = batch.pos[idx_sampled]
+
+        edge_index, _ = subgraph(idx_sampled, batch.edge_index, relabel_nodes=True, num_nodes=batch.num_nodes)
+
+        new_data = Batch(batch=batch_idx, x=x, edge_index=edge_index, pos=pos, width=batch.width, height=batch.height, num_graphs = batch.num_graphs, num_nodes = idx_sampled.numel())
+
+        if self.transform is not None:
+            if new_data.edge_index.numel() > 0:
+                new_data = self.transform(new_data)
+            else:
+                new_data.edge_attr = torch.zeros(size=(0,pos.shape[1]), dtype=pos.dtype, device=pos.device)
 
         return new_data
