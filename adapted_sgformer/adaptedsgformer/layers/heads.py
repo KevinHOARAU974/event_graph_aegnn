@@ -232,6 +232,18 @@ class SparseYoloxHead(YOLOXHead):
             y_shifts,
         )
 
+        anchor_size_factor = 1
+        while not fg_mask.any():
+            anchor_size_factor += 1
+            fg_mask, geometry_relation = self.get_geometry_constraint(
+                batch_idx,
+                gt_bboxes_per_image,
+                expanded_strides,
+                x_shifts,
+                y_shifts,
+                anchor_size_factor
+            )
+
         bboxes_preds_per_image = bboxes_preds_per_image[fg_mask]
         cls_preds_ = cls_preds[batch_idx][fg_mask]
         obj_preds_ = obj_preds[batch_idx][fg_mask]
@@ -293,7 +305,7 @@ class SparseYoloxHead(YOLOXHead):
     
 
     def get_geometry_constraint(
-        self, batch_idx, gt_bboxes_per_image, expanded_strides, x_shifts, y_shifts,
+        self, batch_idx, gt_bboxes_per_image, expanded_strides, x_shifts, y_shifts, anchor_size_factor=1
     ):
         """
         Calculate whether the center of an object is located in a fixed range of
@@ -305,7 +317,7 @@ class SparseYoloxHead(YOLOXHead):
         y_centers_per_image = ((y_shifts[batch_idx]) * expanded_strides_per_image[1]).unsqueeze(0)
 
         # in fixed center
-        center_radius = 1.5
+        center_radius = 1.5 * anchor_size_factor
         center_dist = expanded_strides_per_image[-1].unsqueeze(0) * center_radius
         gt_bboxes_per_image_l = (gt_bboxes_per_image[:, 0:1]) - center_dist
         gt_bboxes_per_image_r = (gt_bboxes_per_image[:, 0:1]) + center_dist
@@ -322,6 +334,42 @@ class SparseYoloxHead(YOLOXHead):
         geometry_relation = is_in_centers[:, anchor_filter]
 
         return anchor_filter, geometry_relation
+
+
+    def simota_matching(self, cost, pair_wise_ious, gt_classes, num_gt, fg_mask):
+        matching_matrix = torch.zeros_like(cost, dtype=torch.uint8)
+
+        n_candidate_k = min(10, pair_wise_ious.size(1))
+        topk_ious, _ = torch.topk(pair_wise_ious, n_candidate_k, dim=1)
+        # dynamic_ks = torch.clamp(topk_ious.sum(1).int(), min=1)
+        dynamic_ks = dynamic_ks * 0 + n_candidate_k ## Dirty fix, in a nutshell we always want the same objective for a given point
+        for gt_idx in range(num_gt):
+            _, pos_idx = torch.topk(
+                cost[gt_idx], k=dynamic_ks[gt_idx], largest=False
+            )
+            matching_matrix[gt_idx][pos_idx] = 1
+
+        del topk_ious, dynamic_ks, pos_idx
+
+        anchor_matching_gt = matching_matrix.sum(0)
+        # deal with the case that one anchor matches multiple ground-truths
+        if anchor_matching_gt.max() > 1:
+            multiple_match_mask = anchor_matching_gt > 1
+            _, cost_argmin = torch.min(cost[:, multiple_match_mask], dim=0)
+            matching_matrix[:, multiple_match_mask] *= 0
+            matching_matrix[cost_argmin, multiple_match_mask] = 1
+        fg_mask_inboxes = anchor_matching_gt > 0
+        num_fg = fg_mask_inboxes.sum().item()
+
+        fg_mask[fg_mask.clone()] = fg_mask_inboxes
+
+        matched_gt_inds = matching_matrix[:, fg_mask_inboxes].argmax(0)
+        gt_matched_classes = gt_classes[matched_gt_inds]
+
+        pred_ious_this_matching = (matching_matrix * pair_wise_ious).sum(0)[
+            fg_mask_inboxes
+        ]
+        return num_fg, gt_matched_classes, pred_ious_this_matching, matched_gt_inds
 
 
     def forward(self, xin: Batch, labels=None, imgs=None):
