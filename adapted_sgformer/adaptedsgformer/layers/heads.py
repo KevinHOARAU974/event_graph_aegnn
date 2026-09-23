@@ -342,7 +342,7 @@ class SparseYoloxHead(YOLOXHead):
         n_candidate_k = min(10, pair_wise_ious.size(1))
         topk_ious, _ = torch.topk(pair_wise_ious, n_candidate_k, dim=1)
         dynamic_ks = torch.clamp(topk_ious.sum(1).int(), min=1)
-        dynamic_ks = dynamic_ks * 0 + n_candidate_k ## Dirty fix, in a nutshell we always want the same objective for a given anchor point
+        dynamic_ks = torch.clamp(dynamic_ks * 0 + n_candidate_k, min=1) ## Dirty fix, in a nutshell we always want the same objective for a given anchor point
         for gt_idx in range(num_gt):
             _, pos_idx = torch.topk(
                 cost[gt_idx], k=dynamic_ks[gt_idx], largest=False
