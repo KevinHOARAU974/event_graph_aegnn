@@ -5,7 +5,7 @@ from yolox.models import YOLOX
 from dagr.model.utils import postprocess_network_output, convert_to_training_format, convert_to_evaluation_format
 
 from adaptedsgformer.layers.backbone import BackboneGT
-from adaptedsgformer.layers.heads import GNNHead
+from adaptedsgformer.layers.heads import GNNHead, SparseYoloxHead
 
 from argparse import Namespace
 
@@ -20,9 +20,16 @@ class DetectionGT(YOLOX):
         self.width = width
 
         backbone = BackboneGT(height=height, width=width, **args["backbone"])
-        head = GNNHead(num_classes=num_classes,
-                        strides=backbone.strides,
-                        in_channels=backbone.hidden_channels_list[-backbone.num_scales:], args=Namespace(**args['head']))
+        head_args = dict(
+            num_classes=num_classes,
+            strides=backbone.strides,
+            in_channels=backbone.hidden_channels_list[-backbone.num_scales:], 
+            args=Namespace(**args['head'])
+        )
+        if args['backbone']['pooling_type_list'][0] == 'uniform_sampling':
+            head = SparseYoloxHead(**head_args)
+        else:
+            head = GNNHead(**head_args)
         
         super().__init__(backbone, head)
 

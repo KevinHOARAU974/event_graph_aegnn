@@ -55,6 +55,7 @@ class BackboneGT(nn.Module):
             self.num_scales = num_scales
     
             self.poolings, self.samplings = compute_pooling_at_each_layer(last_voxel_div, num_layers=num_blocks)
+            self.sparse = pooling_type_list[0] == 'uniform_sampling'
 
             print(f'poolings: {self.poolings}')
             print(f'samplings: {self.samplings}')
@@ -79,6 +80,8 @@ class BackboneGT(nn.Module):
             self.events_to_graph = EV_TGN(**args_gr)
 
             self.hidden_channels_list = hidden_channels_list
+
+            self.cartesian_transform_out = T.Cartesian(norm=True, cat=False, max_value=1.0)
             
             if self.pe_aggr == 'add':
                 assert in_channels % 3 == 0
@@ -138,9 +141,9 @@ class BackboneGT(nn.Module):
                                     }
                 elif pooling_type_list[i] == 'uniform_sampling':
                     pooling_params = {  
-                        "n_sample": self.samplings[i],
-                                        "transform": None,
-                                    }
+                        "n_sample": int(self.samplings[i]),
+                        "save_dist": attn_type_block_list[i] == 'bias',
+                    }
                     
 
                 if attn_type_block_list[i] == 'bias':
@@ -172,8 +175,8 @@ class BackboneGT(nn.Module):
         data = batch.clone().to(device)
 
         # check_graphs(batch, "DataLoader")
-
-        data = self.events_to_graph(data)
+        if not self.sparse:
+            data = self.events_to_graph(data)
 
         # check_graphs(data, "Après ev_to_gr")
 
@@ -205,6 +208,17 @@ class BackboneGT(nn.Module):
             data = self.block_dagt[i](data)
             # check_graphs(data, f"AFTER BLOCK {i+1}")
 
-        data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
+        if getattr(self.block_dagt[-1].pooling, "voxel_size", None) is not None:
+            data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
+
+        # Post pro for sparse pipeline
+        if self.sparse:
+            # Construct the graph at the end of the backbone with a maximal radius
+            data = self.events_to_graph(data)
+            # Remove self loops
+            edge_index = data.edge_index
+            data.edge_index = edge_index[:, edge_index[0] != edge_index[1]]
+            # Cartesian transform
+            data = self.cartesian_transform_out(data)
 
         return data

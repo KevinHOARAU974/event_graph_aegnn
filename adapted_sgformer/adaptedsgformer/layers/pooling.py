@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import torch_scatter
 
 from torch_geometric.data import Batch
@@ -261,44 +262,86 @@ class Pooling2(nn.Module):
 
 class UniformSampling(nn.Module):
 
-    def __init__(self, n_sample, transform: Callable[[Data, ], Data] = None):
+    def __init__(self, n_sample, save_dist, transform=None): # transform just for compatiblity
 
         super(UniformSampling,self).__init__()
 
-        self.n_sample = n_sample #Number of nodes after sampling
+        self.n_sample = n_sample # Number of nodes after sampling
+        self.save_dist = save_dist
 
-        self.transform = transform
+    def forward(self, batch):
 
-    def forward(self, batch: Batch):
+        device = batch.x.device
 
-        idx_sampled = []
+        batch_list = []
 
         for b in range(batch.num_graphs):
+            graph = batch.get_example(b)
+            N = graph.num_nodes
+            
+            # Random cluster center selection
+            chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
+            chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
+            anchor_coords = graph.pos[chosen_nodes]
 
-            idx = torch.where(batch.batch == b)[0]
+            # Distance matrix, shape (N x self.n_sample)
+            dist_mat = (graph.pos[:, None] - anchor_coords[None]).norm(dim=-1)
 
-            perm = torch.randperm(idx.numel(), device=idx.device)
+            # Calculate node assignment to the closest anchor node
+            assignments = torch.argmin(dist_mat, dim=-1)
 
-            idx = idx[perm[:self.n_sample]]
+            # Max pooling of node features
+            pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce='max')
 
-            idx_sampled.append(idx) #index of sampled node in this graph
+            feature_dict = dict(
+                x=pooled_features,
+                pos=anchor_coords,
+                width=graph.width, 
+                height=graph.height, 
+                time_window=graph.time_window
+            )
 
-        idx_sampled = torch.cat(idx_sampled)
+            if self.save_dist:
+                feature_dict.update({'dist_mat': dist_mat[chosen_nodes]})
+            
+            new_graph = Data(**feature_dict)
+            batch_list.append(new_graph)
+
+        data_batch = Batch.from_data_list(batch_list)
+
+        return data_batch
+
+
+    # def forward(self, batch: Batch):
+
+    #     idx_sampled = []
+
+    #     for b in range(batch.num_graphs):
+
+    #         idx = torch.where(batch.batch == b)[0]
+
+    #         perm = torch.randperm(idx.numel(), device=idx.device)
+
+    #         idx = idx[perm[:self.n_sample]]
+
+    #         idx_sampled.append(idx) #index of sampled node in this graph
+
+    #     idx_sampled = torch.cat(idx_sampled)
 
 
 
-        x = batch.x[idx_sampled]
-        batch_idx = batch.batch[idx_sampled]
-        pos = batch.pos[idx_sampled]
+    #     x = batch.x[idx_sampled]
+    #     batch_idx = batch.batch[idx_sampled]
+    #     pos = batch.pos[idx_sampled]
 
-        edge_index, _ = subgraph(idx_sampled, batch.edge_index, relabel_nodes=True, num_nodes=batch.num_nodes)
+    #     edge_index, _ = subgraph(idx_sampled, batch.edge_index, relabel_nodes=True, num_nodes=batch.num_nodes)
 
-        new_data = Batch(batch=batch_idx, x=x, edge_index=edge_index, pos=pos, width=batch.width, height=batch.height, num_graphs = batch.num_graphs, num_nodes = idx_sampled.numel())
+    #     new_data = Batch(batch=batch_idx, x=x, edge_index=edge_index, pos=pos, width=batch.width, height=batch.height, num_graphs = batch.num_graphs, num_nodes = idx_sampled.numel())
 
-        if self.transform is not None:
-            if new_data.edge_index.numel() > 0:
-                new_data = self.transform(new_data)
-            else:
-                new_data.edge_attr = torch.zeros(size=(0,pos.shape[1]), dtype=pos.dtype, device=pos.device)
+    #     if self.transform is not None:
+    #         if new_data.edge_index.numel() > 0:
+    #             new_data = self.transform(new_data)
+    #         else:
+    #             new_data.edge_attr = torch.zeros(size=(0,pos.shape[1]), dtype=pos.dtype, device=pos.device)
 
-        return new_data
+    #     return new_data

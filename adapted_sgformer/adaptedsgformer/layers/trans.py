@@ -284,13 +284,13 @@ class BiasSoftmaxTrans(nn.Module):
         self.Wq = nn.Linear(in_channels, out_channels)
         self.Wv = nn.Linear(in_channels, out_channels)
 
-        self.Wa = nn.Linear(3, self.num_heads) #Multiplicative bias
-        self.Wb = nn.Linear(3, self.num_heads) #Additive attention bias
-        self.Wc = nn.Linear(3, self.out_channels) #Additive values bias
+        self.Wa = nn.Linear(1, num_heads) # Multiplicative bias
+        self.Wb = nn.Linear(1, num_heads) # Additive attention bias
+        self.Wc = nn.Linear(num_heads, out_channels) # Additive values bias
 
-        self.pa = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
-        self.pb = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
-        self.pc = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+        # self.pa = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+        # self.pb = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
+        # self.pc = nn.Parameter(torch.tensor([0.0, 0.0, 0.0])) #Learnable parameter for far events
 
         self.dropout = nn.Dropout(dropout)
 
@@ -319,55 +319,61 @@ class BiasSoftmaxTrans(nn.Module):
         #QK^T
         attn = torch.einsum("bnhm, blhm -> bhnl", qs, ks)
 
-        #Compute attention bias with edge
-        src = batch.edge_index[0,:]
-        dst = batch.edge_index[1,:]
+        # #Compute attention bias with edge
+        # src = batch.edge_index[0,:]
+        # dst = batch.edge_index[1,:]
 
-        batch_edge = batch.batch[src]
+        # batch_edge = batch.batch[src]
 
-        cum_sum = torch.cumsum(batch.batch.unique(return_counts=True)[1], dim=0)
+        # cum_sum = torch.cumsum(batch.batch.unique(return_counts=True)[1], dim=0)
 
-        offset = torch.cat([torch.zeros(1, dtype=cum_sum.dtype, device=cum_sum.device), cum_sum], dim=0)[:batch.num_graphs]
+        # offset = torch.cat([torch.zeros(1, dtype=cum_sum.dtype, device=cum_sum.device), cum_sum], dim=0)[:batch.num_graphs]
 
-        offset = offset[batch_edge]
+        # offset = offset[batch_edge]
 
-        # offset = batch.ptr[:-1][batch_edge]
+        # # offset = batch.ptr[:-1][batch_edge]
 
-        src_loc = src - offset
-        dst_loc = dst - offset
+        # src_loc = src - offset
+        # dst_loc = dst - offset
 
-        mul_bias = self.Wa(batch.edge_attr)
-        add_att_bias = self.Wb(batch.edge_attr)
-        add_val_bias = self.Wc(batch.edge_attr).reshape(-1, self.num_heads, self.head_dim)
+        # mul_bias = self.Wa(batch.edge_attr)
+        # add_att_bias = self.Wb(batch.edge_attr)
+        # add_val_bias = self.Wc(batch.edge_attr).reshape(-1, self.num_heads, self.head_dim)
 
-        mul_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=mul_bias.device, dtype=mul_bias.dtype) * self.Wa(self.pa).view(1, self.num_heads, 1, 1)
-        add_att_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=add_att_bias.device, dtype=add_att_bias.dtype) * self.Wb(self.pb).view(1, self.num_heads, 1, 1)
-        add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, 1, self.head_dim)
+        # mul_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=mul_bias.device, dtype=mul_bias.dtype) * self.Wa(self.pa).view(1, self.num_heads, 1, 1)
+        # add_att_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=add_att_bias.device, dtype=add_att_bias.dtype) * self.Wb(self.pb).view(1, self.num_heads, 1, 1)
+        # add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, 1, self.head_dim)
 
-        mul_bias_dense[batch_edge, :, dst_loc, src_loc] = mul_bias
-        add_att_bias_dense[batch_edge, :, dst_loc, src_loc] = add_att_bias
-        add_val_bias_dense[batch_edge, :, dst_loc, src_loc, :] = add_val_bias 
+        # mul_bias_dense[batch_edge, :, dst_loc, src_loc] = mul_bias
+        # add_att_bias_dense[batch_edge, :, dst_loc, src_loc] = add_att_bias
+        # add_val_bias_dense[batch_edge, :, dst_loc, src_loc, :] = add_val_bias 
 
-        attn_bias  = attn * mul_bias_dense
-        attn_bias *= self.scale
-        attn_bias += add_att_bias_dense
+        # -----
 
-        ##Set padding values to -inf before softmax
-        attn_bias = attn_bias.masked_fill(~mask_dense[:, None, None, :],float("-inf"))
-        attn_bias = F.softmax(attn_bias, dim=-1)
+        ## Attention bias w/ node pairs distances
 
-        attn_bias = self.dropout(attn_bias)
+        dist_mat = batch.dist_mat.view(batch_size, Nmax, Nmax, 1)
 
-        #out V
-        out_v = torch.einsum("bhnj, bjhd -> bnhd", attn_bias, vs)
+        mul_bias = self.Wa(dist_mat).permute(0, 3, 1, 2) # Size bs, Nmax, Nmax, n heads
+        add_att_bias = self.Wb(dist_mat).permute(0, 3, 1, 2)
 
-        #out bias edge
-        out_edge = torch.einsum("bhnj,bhnjd->bnhd", attn_bias, add_val_bias_dense)
+        attn = attn * mul_bias * self.scale + add_att_bias
 
-        out = out_v + out_edge
+        ## Set padding values to -inf before softmax
+        attn_norm = attn.masked_fill(~mask_dense[:, None, None, :],float("-inf"))
+        attn_norm = F.softmax(attn_norm, dim=-1)
+
+        attn_norm = self.dropout(attn_norm)
+
+        # V multiplication
+        out_v = torch.einsum("bhnj, bjhd -> bnhd", attn_norm, vs)
+
+        # V bias
+        bias = torch.einsum("bhnj, bhnj -> bnh", attn_norm, attn)
+        out = out_v.flatten(start_dim=-2) + self.Wc(bias)
 
         out = out[mask_dense]
-        out = out.reshape(out.size(0), self.out_channels)
+        # out = out.reshape(out.size(0), self.out_channels)
 
         out = self.Wo(out)
 
