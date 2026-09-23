@@ -57,8 +57,8 @@ class BackboneGT(nn.Module):
             self.poolings, self.samplings = compute_pooling_at_each_layer(last_voxel_div, num_layers=num_blocks)
             self.sparse = pooling_type_list[0] == 'uniform_sampling'
 
-            print(f'poolings: {self.poolings}')
-            print(f'samplings: {self.samplings}')
+            # print(f'poolings: {self.poolings}')
+            # print(f'samplings: {self.samplings}')
 
             max_vals_for_cartesian = 2*self.poolings[:,:2].max(-1).values
             self.strides = torch.ceil(self.poolings[-2:,1] * height).numpy().astype("int32").tolist()
