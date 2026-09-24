@@ -55,6 +55,7 @@ model_params:
     after_pool_width: 1
     net_stem_width: 1
     yolo_stem_width: 1
+    mlp: True
     num_scales: *ns
 
 augmentations:

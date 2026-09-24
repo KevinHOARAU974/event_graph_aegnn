@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.data import Batch
 
@@ -9,6 +10,7 @@ from dagr.model.layers.conv import ConvBlock
 from dagr.model.utils import shallow_copy, init_grid_and_stride
 
 from adaptedsgformer.layers.spline_conv import SplineConvToDense, MySplineConv
+from adaptedsgformer.utils import embed_1D_scalar
         
 
 
@@ -143,6 +145,18 @@ class GNNHead(YOLOXHead):
         return outputs
 
 
+class SimpleMLP(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Linear(in_dim, out_dim),
+            nn.SiLU(),
+            nn.Linear(out_dim, out_dim),
+        )
+    def forward(self, batch):
+        batch.x = self.block(batch.x)
+        return batch
+    
 
 class SparseYoloxHead(YOLOXHead):
 
@@ -164,13 +178,28 @@ class SparseYoloxHead(YOLOXHead):
         self.in_channels = in_channels
         self.num_classes = num_classes
 
-        n_reg = max(in_channels)
-        self.stem = ConvBlock(in_channels=in_channels[0], out_channels=n_reg, args=args)
-        self.cls_conv = ConvBlock(in_channels=n_reg, out_channels=n_reg, args=args)
-        self.cls_pred = MySplineConv(in_channels=n_reg, out_channels=self.num_classes, bias=True, args=args)
-        self.reg_conv = ConvBlock(in_channels=n_reg, out_channels=n_reg, args=args)
-        self.reg_pred = MySplineConv(in_channels=n_reg, out_channels=4, bias=True, args=args)
-        self.obj_pred = MySplineConv(in_channels=n_reg, out_channels=1, bias=True, args=args)
+        self.in_dim = in_channels[0]
+        hidden_dim = max(in_channels)
+
+        self.pe_embedding = nn.Sequential(*[
+            nn.Linear(3 * self.in_dim, self.in_dim),
+            nn.SiLU()
+        ])
+
+        if args.mlp:
+            self.stem = SimpleMLP(self.in_dim, hidden_dim)
+            self.cls_conv = SimpleMLP(hidden_dim, hidden_dim)
+            self.cls_pred = SimpleMLP(hidden_dim, self.num_classes)
+            self.reg_conv = SimpleMLP(hidden_dim, hidden_dim)
+            self.reg_pred = SimpleMLP(hidden_dim, 4)
+            self.obj_pred = SimpleMLP(hidden_dim, 1)
+        else:
+            self.stem = ConvBlock(in_channels=self.in_dim, out_channels=hidden_dim, args=args)
+            self.cls_conv = ConvBlock(in_channels=hidden_dim, out_channels=hidden_dim, args=args)
+            self.cls_pred = MySplineConv(in_channels=hidden_dim, out_channels=self.num_classes, bias=True, args=args)
+            self.reg_conv = ConvBlock(in_channels=hidden_dim, out_channels=hidden_dim, args=args)
+            self.reg_pred = MySplineConv(in_channels=hidden_dim, out_channels=4, bias=True, args=args)
+            self.obj_pred = MySplineConv(in_channels=hidden_dim, out_channels=1, bias=True, args=args)
 
         self.use_l1 = False
         self.l1_loss = torch.nn.L1Loss(reduction="none")
@@ -185,6 +214,14 @@ class SparseYoloxHead(YOLOXHead):
 
 
     def process_feature(self, batch):
+
+        # Encode position
+        normalizer = torch.stack([batch.width[0], batch.height[0], batch.time_window[0]], dim=-1)
+        embed_pos = torch.cat([
+            embed_1D_scalar(batch.pos[:, dim_in] * fact.item(), self.in_dim, max_period=fact.item()) for (dim_in, fact) in enumerate(normalizer)
+        ], dim=1)
+        embed_pos = self.pe_embedding(embed_pos)
+        batch.x = batch.x + embed_pos
 
         x = self.stem(batch)
 

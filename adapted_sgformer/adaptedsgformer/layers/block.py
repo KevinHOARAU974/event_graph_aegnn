@@ -177,10 +177,17 @@ class BlockDectectGT(nn.Module):
             self.proj = nn.Identity(self.in_gt)
         elif self.pe_aggr == "cat":
             assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
+            self.pe_dim = pe_dim
             self.in_gt = in_channels + pe_dim
             self.proj = nn.Linear(self.in_gt, in_channels)
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
+        #########
+        self.pe_embedding = nn.Sequential(*[
+            nn.Linear(self.pe_dim, self.pe_dim),
+            nn.LeakyReLU()
+        ])
+        #########
 
 
         self.blockGT = BlockGT(
@@ -198,7 +205,7 @@ class BlockDectectGT(nn.Module):
             embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
-        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+        embed_pos = self.pe_embedding(embed_pos.reshape(embed_pos.shape[0], -1))
 
         if self.pe_aggr == "add":
             data.x += embed_pos

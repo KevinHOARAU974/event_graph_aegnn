@@ -11,7 +11,7 @@ from adaptedsgformer.utils import compute_pooling_at_each_layer
 from adaptedsgformer.layers.block import BlockDectectGT, BlockGT
 from adaptedsgformer.layers.ev_to_gr import EV_TGN
 
-from adaptedsgformer.utils import embed_1D_scalar,check_graphs
+from adaptedsgformer.utils import embed_1D_scalar, check_graphs
 
 class BackboneGT(nn.Module):
 
@@ -93,6 +93,12 @@ class BackboneGT(nn.Module):
                 self.pe_dim = pe_dim
                 self.in_proj = in_channels + pe_dim
                 # self.proj = nn.Linear(self.in_proj, in_channels)
+            #########
+            self.pe_embedding = nn.Sequential(*[
+                nn.Linear(self.pe_dim, self.pe_dim),
+                nn.LeakyReLU()
+            ])
+            #########
 
             if self.first_trans_block:
 
@@ -186,7 +192,7 @@ class BackboneGT(nn.Module):
             embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
-        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+        embed_pos = self.pe_embedding(embed_pos.reshape(embed_pos.shape[0], -1))
 
         x_emb = self.x_embedding(data.x.long()).squeeze(1)
 
