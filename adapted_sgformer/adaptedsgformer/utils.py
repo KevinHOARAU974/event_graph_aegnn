@@ -61,6 +61,8 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
         B = batch.max().item() + 1
         self.batch_size = B
 
+    pooling = pooling.to(x.device)
+
     
     W, H = (1 / pooling[:2] + 1e-3).long()
     C = x.shape[-1]
@@ -81,7 +83,7 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
 
     dense = self.dense[:B] if B < self.dense.shape[0] else self.dense
     
-    dense[batch.long(), :, est_y, est_x] = x
+    dense[batch.long(), :, est_y, est_x] += x
 
     return dense
 

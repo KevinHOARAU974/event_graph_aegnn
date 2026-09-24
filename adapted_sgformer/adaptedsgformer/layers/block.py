@@ -209,4 +209,6 @@ class BlockDectectGT(nn.Module):
 
         data.x = self.blockGT(data)
 
+        
+
         return data

@@ -208,8 +208,8 @@ class BackboneGT(nn.Module):
             data = self.block_dagt[i](data)
             # check_graphs(data, f"AFTER BLOCK {i+1}")
 
-        if getattr(self.block_dagt[-1].pooling, "voxel_size", None) is not None:
-            data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
+        # if getattr(self.block_dagt[-1].pooling, "voxel_size", None) is not None:
+        data.pooling = self.poolings[-1,:3]
 
         # Post pro for sparse pipeline
         if self.sparse:

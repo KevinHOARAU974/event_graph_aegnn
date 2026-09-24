@@ -46,6 +46,7 @@ model_params:
       max_neighbors: 16
 
   head:
+    sparse: False
     activation: relu
     edge_attr_dim: 2
     aggr: sum
