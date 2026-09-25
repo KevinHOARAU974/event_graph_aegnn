@@ -83,7 +83,13 @@ def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
 
     dense = self.dense[:B] if B < self.dense.shape[0] else self.dense
     
-    dense[batch.long(), :, est_y, est_x] += x
+    cell_idx = batch.long() * (H*W) + est_y * W + est_x #Compute the cell id for each node
+
+    dense_flat = dense.permute(0, 2, 3, 1).reshape(B*H*W, C) #Reshape dense tensor
+
+    dense_flat.scatter_reduce_(dim=0, index=cell_idx[:, None].expand(-1, C), src=x, reduce="mean", include_self=False) #Make the mean operation on features nodes in the same cell
+
+    dense = dense_flat.view(B, H, W, C).permute(0, 3, 1, 2)
 
     return dense
 
