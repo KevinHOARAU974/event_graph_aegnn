@@ -277,7 +277,7 @@ class SparseHead(YOLOXHead):
         assert output.shape[0] == pos.shape[0]
 
         #Without grid, we considered the center of the bbox as the denormalize position of the node corrected by the output of the model
-        output[..., :2]  = output[..., :2] + pos[:,:2]*self.WH 
+        output[..., :2] = (output[..., :2] + pos[:,:2])*self.WH 
 
         #The width and the height of the bounding box are compute like in YOLOX without the stride term
         output[..., 2:4] = torch.exp(output[..., 2:4])*self.WH
@@ -577,7 +577,7 @@ class SparseHead(YOLOXHead):
     def decode_outputs(self, outputs, pos, dtype):
 
         #Without grid, we considered the center of the bbox as the denormalize position of the node corrected by the output of the model
-        outputs[..., :2]  = outputs[..., :2] + pos[:,:2]*self.WH 
+        outputs[..., :2]  = (outputs[..., :2] + pos[:,:2])*self.WH 
         
         #The width and the height of the bounding box are compute like in YOLOX without the stride term
         outputs[..., 2:4] = torch.exp(outputs[..., 2:4])*self.WH
