@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 
+from dagr.model.utils import batched_nms_coordinate_trick,_sequential_counter
+
 def embed_1D_scalar(t, dim, max_period):
     """
     Create sinusoidal timestep embeddings.
@@ -99,6 +101,7 @@ def format_data(data, normalizer=None):
     return data
 
 def check_graphs(data, stage, log_file="graph_debug.log"):
+
     # IDs de graphes qui possèdent effectivement des noeuds
     present_ids, counts = torch.unique(
         data.batch,
@@ -159,3 +162,90 @@ def check_graphs(data, stage, log_file="graph_debug.log"):
             f"missing graph IDs={missing_ids_cpu}, "
             f"dataset samples={missing_samples}"
         )
+
+def postprocess_network_output(prediction, batch_pred, batch_size ,num_classes, conf_thre=0.01, nms_thre=0.65, height=640, width=640, filtering=True, sparse=True):
+    prediction[..., :2] -= prediction[...,2:4] / 2 # cxcywh->xywh
+    prediction[..., 2:4] += prediction[...,:2]
+
+    if sparse:
+        predictions = []
+
+        for batch_idx in range(batch_size):
+            mask = batch_pred == batch_idx
+            predictions.append(prediction[mask])
+
+    else:
+        predictions = prediction
+    
+    output = []
+    for i, image_pred in enumerate(predictions):
+
+        # If none are remaining => process next image
+        if len(image_pred) == 0:
+            device = prediction.device
+            output.append({
+                "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
+                "scores": torch.zeros(0, dtype=torch.float, device=device),
+                "labels": torch.zeros(0, dtype=torch.long, device=device)
+            })
+            continue
+
+        # Get score and class with highest confidence
+        class_conf, class_pred = torch.max(image_pred[:, 5: 5 + num_classes], 1, keepdim=True)
+        image_pred[:, 4:5] *= class_conf
+
+        conf_mask = (image_pred[:, 4] * class_conf.squeeze() >= conf_thre).squeeze()
+        # Detections ordered as (x1, y1, x2, y2, obj_conf, class_conf, class_pred)
+        detections = torch.cat((image_pred[:, :5], class_pred), 1)
+
+        if filtering:
+            detections = detections[conf_mask]
+
+        if len(detections) == 0:
+            device = prediction.device
+            output.append({
+                "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
+                "scores": torch.zeros(0, dtype=torch.float, device=device),
+                "labels": torch.zeros(0, dtype=torch.long, device=device)
+            })
+            continue
+
+        nms_out_index = batched_nms_coordinate_trick(detections[:, :4], detections[:, 4], detections[:, 5],
+                                                      nms_thre, width=width, height=height)
+
+        if filtering:
+            detections = detections[nms_out_index]
+
+        output.append({
+            "boxes": detections[:, :4],
+            "scores": detections[:, 4],
+            "labels": detections[:, -1].long()
+        })
+
+    return output
+
+
+def convert_to_training_format(bbox, batch, batch_size, bbox_batch=None, sparse=True):
+
+    if sparse:
+
+        labels = bbox
+        labels[:, :2] += labels[:, 2:4] * .5
+        labels = torch.roll(labels[:, :5], dims=1, shifts=1)
+
+        targets = [labels, bbox_batch]
+
+    else:
+        max_detections = 100
+        targets = torch.zeros(size=(batch_size, max_detections, 5), dtype=torch.float32, device=bbox.device)
+        unique, counts = torch.unique(batch, return_counts=True)
+        counter = _sequential_counter(counts)
+
+        bbox = bbox.clone()
+        # xywhlc pix -> lcxcywh pix
+        bbox[:, :2] += bbox[:, 2:4] * .5
+        bbox = torch.roll(bbox[:, :5], dims=1, shifts=1)
+
+        targets[batch, counter] = bbox
+
+    return targets
