@@ -280,8 +280,11 @@ class UniformSampling(nn.Module):
             N = graph.num_nodes
             
             # Random cluster center selection
-            chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
-            chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
+            # chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
+            # chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
+            # anchor_coords = graph.pos[chosen_nodes]
+
+            chosen_nodes = torch.linspace(0, N-1, steps=self.n_sample, dtype=int)
             anchor_coords = graph.pos[chosen_nodes]
 
             # Distance matrix, shape (N x self.n_sample)
