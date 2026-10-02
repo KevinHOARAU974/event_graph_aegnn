@@ -163,6 +163,7 @@ class BlockDectectGT(nn.Module):
         if pooling_type == "voxel_pooling":
             self.pooling = Pooling2(**pooling_params)
         elif pooling_type == "uniform_sampling":
+            pooling_params.update(dict(dim=in_channels))
             self.pooling = UniformSampling(**pooling_params)
         
         self.pe_aggr = pe_aggr #Aggregation of PE and node features

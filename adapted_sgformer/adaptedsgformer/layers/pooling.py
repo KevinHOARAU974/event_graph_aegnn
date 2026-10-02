@@ -262,13 +262,14 @@ class Pooling2(nn.Module):
 
 class UniformSampling(nn.Module):
 
-    def __init__(self, n_sample, save_dist, aggr="max", transform=None): # transform just for compatiblity
+    def __init__(self, dim, n_sample, save_dist, aggr="max", transform=None): # transform just for compatiblity
 
         super(UniformSampling,self).__init__()
 
         self.n_sample = n_sample # Number of nodes after sampling
         self.save_dist = save_dist
         self.aggr = aggr
+        self.proj = nn.Linear(dim, dim)
 
         print(aggr)
 
@@ -298,9 +299,10 @@ class UniformSampling(nn.Module):
 
             # Max pooling of node features
             pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
+            features = graph.x[chosen_nodes] + self.proj(pooled_features)
 
             feature_dict = dict(
-                x=pooled_features,
+                x=features,
                 pos=anchor_coords,
                 width=graph.width, 
                 height=graph.height, 
