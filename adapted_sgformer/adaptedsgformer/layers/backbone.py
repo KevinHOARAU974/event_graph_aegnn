@@ -149,6 +149,7 @@ class BackboneGT(nn.Module):
                     pooling_params = {  
                         "n_sample": int(self.samplings[i]),
                         "save_dist": attn_type_block_list[i] == 'bias',
+                        "aggr": "max",
                     }
                     
 
@@ -158,8 +159,8 @@ class BackboneGT(nn.Module):
                     pooling_params['transform'] = cart
 
                 if i==num_blocks-1:
-                    if pooling_type_list[i] == 'voxel_pooling':
-                        pooling_params['aggr'] = 'mean'
+                    # if pooling_type_list[i] == 'voxel_pooling':
+                    pooling_params['aggr'] = 'mean'
                     cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
                     pooling_params['transform'] = cart                
 

@@ -167,8 +167,7 @@ class SparseYoloxHead(YOLOXHead):
         in_channels=[256, 512, 1024],
         act="silu",
         depthwise=False,
-        args=None
-        
+        args=None,
     ):
 
         torch.nn.Module.__init__(self)
@@ -180,7 +179,6 @@ class SparseYoloxHead(YOLOXHead):
 
         self.in_dim = in_channels[0]
         hidden_dim = max(in_channels)
-
         self.pe_embedding = nn.Sequential(*[
             nn.Linear(3 * self.in_dim, self.in_dim),
             nn.SiLU()
@@ -441,7 +439,7 @@ class SparseYoloxHead(YOLOXHead):
     def get_output_and_grid(self, output, pos, stride, batch_size, normalizer):
 
         output[:, :2] = (output[:, :2] + pos[:, :2]) * normalizer[None]
-        output[:, 2:4] = torch.exp(output[:, 2:4]) * stride
+        output[:, 2:4] = torch.exp(output[:, 2:4]) * normalizer[None]
         output = output.view(batch_size, -1, self.num_classes + 5)
 
         return output, pos.view(batch_size, -1, 3)
