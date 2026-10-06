@@ -28,7 +28,8 @@ class BackboneGT(nn.Module):
                     pe_aggr='cat',
                     width = 120,
                     height = 100,
-                    pool_aggr = 'max', 
+                    pool_aggr = 'max',
+                    threshold = None,
                     keep_temporal_ordering=False,
                     self_loop=False,
                     encoding_periods=[120, 100, 50],
@@ -141,7 +142,9 @@ class BackboneGT(nn.Module):
                         "n_sample": self.samplings[i],
                                         "transform": None,
                                     }
-                    
+
+                if i==0:
+                    pooling_params['threshold'] = threshold
 
                 if attn_type_block_list[i] == 'bias':
                     block_gt_params["dropout_attn"] = dropout_attn

@@ -60,6 +60,7 @@ class Pooling(torch.nn.Module):
 
         pos = data.pos[:,:2]
         cluster = voxel_grid(pos, batch=data.batch, size=self.voxel_size, start=self.start, end=self.end)
+
         _, cluster, perm, _ = consecutive_cluster(cluster)
         edge_index = cluster[data.edge_index]
         if self.self_loop:
@@ -176,7 +177,7 @@ class Avg_voxel_pooling(nn.Module):
 
 class Pooling2(nn.Module):
 
-    def __init__(self, size: List[float], width, height, transform: Callable[[Data, ], Data], aggr: str = 'max', keep_temporal_ordering=False, dim=2, self_loop=False, in_channels=-1, normalisation=False):
+    def __init__(self, size: List[float], width, height, transform: Callable[[Data, ], Data], threshold = None, aggr: str = 'max', keep_temporal_ordering=False, dim=2, self_loop=False, in_channels=-1, normalisation=False):
         super(Pooling2, self).__init__()
         assert aggr in ['mean', 'max']
         self.aggr = aggr
@@ -189,6 +190,8 @@ class Pooling2(nn.Module):
         self.register_buffer("start", torch.Tensor([0,0,0]), persistent=False)
         self.register_buffer("end", torch.Tensor([0.9999999,0.9999999,0.9999999]), persistent=False)
         self.register_buffer("wh_inv", 1/torch.Tensor([[width, height]]), persistent=False)
+
+        self.threshold = threshold
 
         # self.max_num_voxels = batch_size * self.num_grid_cells
         # self.register_buffer("sorted_cluster", torch.arange(self.max_num_voxels), persistent=False)
@@ -211,12 +214,39 @@ class Pooling2(nn.Module):
         if data.x.shape[0] == 0:
             return data
 
-        pos = torch.cat([data.pos, data.batch.float().view(-1,1)], dim=-1)
+        # pos = torch.cat([data.pos, data.batch.float().view(-1,1)], dim=-1)
+        pos = data.pos
+        
 
         cluster = voxel_grid(pos, batch=data.batch, size=self.voxel_size, start=self.start, end=self.end)
 
+        #Thresholding by the number of nodes
+        if self.threshold is not None:
+
+            unique, inverse, counts = cluster.unique(return_inverse=True, return_counts=True)
+
+            mask_cluster = counts >= self.threshold #Mask on clusters that we keep
+
+            mask_node = mask_cluster[inverse] #Mask on nodes that we will keep to make clusters
+
+            edge_index, _ = subgraph(
+                mask_node,
+                data.edge_index,
+                relabel_nodes=True,
+                num_nodes=data.num_nodes
+            )
+
+            cluster = cluster[mask_node]
+            data.pos = data.pos[mask_node]
+            data.x = data.x[mask_node]
+            data.batch = data.batch[mask_node]
+
+        else:
+            edge_index = data.edge_index
+                    
         unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
-        edge_index = cluster[data.edge_index]
+
+        edge_index = cluster[edge_index]
         if self.self_loop:
             edge_index = edge_index.unique(dim=-1)
         else:
@@ -226,6 +256,10 @@ class Pooling2(nn.Module):
 
         batch = None if data.batch is None else data.batch[perm]
         pos = None if data.pos is None else pool_pos(cluster, data.pos)
+
+        pos_pooled = pool_pos(cluster, data.pos)
+
+        # print(pos_pooled.shape)
 
         if self.keep_temporal_ordering:
             t_max, _ = torch_scatter.scatter_max(data.pos[:,-1], cluster, dim=0)
