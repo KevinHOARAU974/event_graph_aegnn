@@ -18,7 +18,7 @@ dataloader:
   num_workers: 8
   pin_memory: True
 
-sparse: True
+sparse: False
 
 model_params:
   backbone:

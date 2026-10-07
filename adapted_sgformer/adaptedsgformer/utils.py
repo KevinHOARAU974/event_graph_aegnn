@@ -163,7 +163,7 @@ def check_graphs(data, stage, log_file="graph_debug.log"):
             f"dataset samples={missing_samples}"
         )
 
-def postprocess_network_output(prediction, batch_pred, batch_size ,num_classes, conf_thre=0.01, nms_thre=0.65, height=640, width=640, filtering=True, sparse=True):
+def postprocess_network_output(prediction, num_classes, batch_size=None ,batch_pred=None, conf_thre=0.01, nms_thre=0.65, height=640, width=640, filtering=True, sparse=False):
     prediction[..., :2] -= prediction[...,2:4] / 2 # cxcywh->xywh
     prediction[..., 2:4] += prediction[...,:2]
 
@@ -182,7 +182,7 @@ def postprocess_network_output(prediction, batch_pred, batch_size ,num_classes, 
 
         # If none are remaining => process next image
         if len(image_pred) == 0:
-            device = prediction.device
+            device = predictions.device
             output.append({
                 "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
                 "scores": torch.zeros(0, dtype=torch.float, device=device),
@@ -202,7 +202,7 @@ def postprocess_network_output(prediction, batch_pred, batch_size ,num_classes, 
             detections = detections[conf_mask]
 
         if len(detections) == 0:
-            device = prediction.device
+            device = predictions.device
             output.append({
                 "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
                 "scores": torch.zeros(0, dtype=torch.float, device=device),
