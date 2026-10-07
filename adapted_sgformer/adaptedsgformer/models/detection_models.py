@@ -48,10 +48,18 @@ class DetectionGT(YOLOX):
 
         batch.reset = reset
 
-        outputs, batch_pred = YOLOX.forward(self, batch)
+        if self.sparse:
+            outputs, batch_pred = YOLOX.forward(self, batch)
 
-        detections = postprocess_network_output(outputs, batch_pred, batch.batch_size ,self.head.num_classes, self.conf_threshold, self.nms_threshold, filtering=filtering,
+            detections = postprocess_network_output(outputs, self.head.num_classes, conf_thre=self.conf_threshold, nms_thre=self.nms_threshold, batch_size=batch.batch_size ,batch_pred=batch_pred, filtering=filtering,
                                                 height=self.height, width=self.width, sparse=self.sparse)
+
+        else:
+            outputs = YOLOX.forward(self, batch)
+
+            detections = postprocess_network_output(outputs, self.head.num_classes, self.conf_threshold, self.nms_threshold, filtering=filtering,
+                                                height=self.height, width=self.width)
+
 
         ret = [detections]
 
