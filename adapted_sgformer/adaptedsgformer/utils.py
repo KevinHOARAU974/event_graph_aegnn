@@ -1,5 +1,6 @@
-import torch
+import torch, torch_geometric
 import numpy as np
+from torch_geometric.utils import degree
 
 def embed_1D_scalar(t, dim, max_period):
     """
@@ -159,3 +160,37 @@ def check_graphs(data, stage, log_file="graph_debug.log"):
             f"missing graph IDs={missing_ids_cpu}, "
             f"dataset samples={missing_samples}"
         )
+
+
+def gym_events_to_graph(batch, r, max_neighbors):
+
+    batch.edge_index = torch_geometric.nn.radius_graph(
+        batch.pos,
+        r,
+        batch.batch,
+        loop=True,
+        flow='source_to_target',
+        max_num_neighbors=max_neighbors,
+        num_workers=4,
+    )
+
+    return batch
+
+
+def deg_tokenize(batch, **kwargs):
+    '''
+    Add node degree to batch as the number of events inside a voxel of side r centered on each event. 
+    '''
+
+    batch = gym_events_to_graph(batch, **kwargs)
+
+    deg = degree(batch.edge_index[0])
+
+    # Encode degree logarithm
+    batch.log_deg = torch.log(1 + deg)
+
+    # Update slice / inc dict to allow calling get example later
+    batch._slice_dict['log_deg'] = batch._slice_dict['x']
+    batch._inc_dict['log_deg'] = batch._inc_dict['x']
+
+    return batch

@@ -9,7 +9,7 @@ from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2, UniformSampling
 from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans, BiasSoftmaxTrans
-from adaptedsgformer.utils import embed_1D_scalar
+from adaptedsgformer.utils import embed_1D_scalar, deg_tokenize
 
 
 class BlockGT(nn.Module):
@@ -160,11 +160,8 @@ class BlockDectectGT(nn.Module):
 
         self.encoding_periods = encoding_periods #Max period for sinusoïdal positional encoding
 
-        if pooling_type == "voxel_pooling":
-            self.pooling = Pooling2(**pooling_params)
-        elif pooling_type == "uniform_sampling":
-            pooling_params.update(dict(dim=in_channels))
-            self.pooling = UniformSampling(**pooling_params)
+        self.sparse = (pooling_type == "uniform_sampling")
+        self.pooling = UniformSampling(**pooling_params) if self.sparse else Pooling2(**pooling_params)
         
         self.pe_aggr = pe_aggr #Aggregation of PE and node features
 
@@ -190,20 +187,27 @@ class BlockDectectGT(nn.Module):
         ])
         #########
 
-
         self.blockGT = BlockGT(
             in_channels,
             out_channels,
             # head_aggr=head_aggr,
             **blockGT_params
         )
-    
+
+        if self.sparse:
+            self.deg_coef = torch.nn.Parameter(torch.zeros(1, self.in_gt, 2))
+            nn.init.xavier_normal_(self.deg_coef)
+
+
     def forward(self, batch: Batch):
 
         data = self.pooling(batch)
 
+        if self.sparse:
+            data = deg_tokenize(data, r=getattr(self.pooling, 'radius'), max_neighbors=299)
+
         embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim // 3, max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
         ], dim=1)
 
         embed_pos = self.pe_embedding(embed_pos.reshape(embed_pos.shape[0], -1))
@@ -211,7 +215,12 @@ class BlockDectectGT(nn.Module):
         if self.pe_aggr == "add":
             data.x += embed_pos
         elif self.pe_aggr == "cat":
-            data.x = torch.cat((data.x,embed_pos), dim=1)
+            data.x = torch.cat((data.x, embed_pos), dim=1)
+
+        # Degree tokenizer
+        if self.sparse:
+            x = torch.stack([data.x, data.x * data.log_deg[:, None]], dim=-1)
+            data.x = (x * self.deg_coef).sum(dim=-1)
 
         data.x = self.proj(data.x)
 

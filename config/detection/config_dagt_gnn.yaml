@@ -22,9 +22,9 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    first_trans_block: False
+    first_trans_block: True
     hidden_channels_list: [36, 48, 64, 64, 64]
-    attn_type_block_list: ['cat', 'cat', 'bias', 'bias']
+    attn_type_block_list: ['cat', 'cat', 'cat', 'bias', 'bias']
     pooling_type_list: ['uniform_sampling', 'uniform_sampling', 'uniform_sampling', 'uniform_sampling']
     last_voxel_div: '5x7'
     # final_size: 16
@@ -42,8 +42,8 @@ model_params:
     norm_func: 'layer'
     num_scales: &ns 1
     args_gr:
-      radius: 1.0
-      max_neighbors: 16
+      radius: 0.1
+      max_neighbors: 999
 
   head:
     activation: relu

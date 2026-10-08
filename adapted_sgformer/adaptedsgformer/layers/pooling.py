@@ -13,7 +13,7 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.nn.pool.avg_pool import _avg_pool_x
 from torch_geometric.nn.pool.pool import pool_pos
 from torch_geometric.utils import subgraph
-
+from torch_geometric.nn import MessagePassing
 from dagr.model.layers.components import BatchNormData
 
 from adaptedsgformer.utils import consecutive_cluster
@@ -262,20 +262,28 @@ class Pooling2(nn.Module):
 
 class UniformSampling(nn.Module):
 
-    def __init__(self, dim, n_sample, save_dist, aggr="max", transform=None): # transform just for compatiblity
+    def __init__(self, radius, n_sample, save_dist, aggr="max", transform=None): # transform just for compatiblity
 
         super(UniformSampling,self).__init__()
 
         self.n_sample = n_sample # Number of nodes after sampling
         self.save_dist = save_dist
         self.aggr = aggr
-        self.proj = nn.Linear(dim, dim)
+        self.radius = radius
+        # self.proj = nn.Linear(dim, dim)
+        self.pool = NeighborPooling(aggr)
 
         print(aggr)
 
     def forward(self, batch):
 
         device = batch.x.device
+
+        # Pooling as message passing
+        assert batch.edge_index is not None
+        batch.x = self.pool(batch.edge_index, batch.x)
+
+        # Centroid selection, then construction of the graph based on current layer's resolution given by self.radius
 
         batch_list = []
 
@@ -284,25 +292,25 @@ class UniformSampling(nn.Module):
             N = graph.num_nodes
             
             # Random cluster center selection
-            # chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
-            # chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
-            # anchor_coords = graph.pos[chosen_nodes]
-
-            chosen_nodes = torch.linspace(0, N-1, steps=self.n_sample, dtype=int)
+            chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
+            chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
             anchor_coords = graph.pos[chosen_nodes]
 
+            # chosen_nodes = torch.linspace(0, N-1, steps=self.n_sample, dtype=int)
+            # anchor_coords = graph.pos[chosen_nodes]
+
             # Distance matrix, shape (N x self.n_sample)
-            dist_mat = (graph.pos[:, None] - anchor_coords[None]).norm(dim=-1)
+            dist_mat = (anchor_coords[:, None] - anchor_coords[None]).norm(dim=-1)
 
-            # Calculate node assignment to the closest anchor node
-            assignments = torch.argmin(dist_mat, dim=-1)
+            # # Calculate node assignment to the closest anchor node
+            # assignments = torch.argmin(dist_mat, dim=-1)
 
-            # Max pooling of node features
-            pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
-            features = graph.x[chosen_nodes] + self.proj(pooled_features)
+            # # Max pooling of node features
+            # pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
+            # features = graph.x[chosen_nodes] + self.proj(pooled_features)
 
             feature_dict = dict(
-                x=features,
+                x=graph.x[chosen_nodes],
                 pos=anchor_coords,
                 width=graph.width, 
                 height=graph.height, 
@@ -310,7 +318,7 @@ class UniformSampling(nn.Module):
             )
 
             if self.save_dist:
-                feature_dict.update({'dist_mat': dist_mat[chosen_nodes]})
+                feature_dict.update({'dist_mat': dist_mat})
             
             new_graph = Data(**feature_dict)
             batch_list.append(new_graph)
@@ -318,6 +326,18 @@ class UniformSampling(nn.Module):
         data_batch = Batch.from_data_list(batch_list)
 
         return data_batch
+
+
+class NeighborPooling(MessagePassing):
+    def __init__(self, aggr_fn='mean'):
+        super().__init__(aggr=aggr_fn)
+
+    def forward(self, edge_index, x):
+        # Supposes self loops
+        return self.propagate(edge_index, x=x)
+
+    def message(self, x_j):
+        return x_j
 
 
     # def forward(self, batch: Batch):
