@@ -159,6 +159,7 @@ class BlockDectectGT(nn.Module):
         self.pe_dim = pe_dim #Position encoding dimension
 
         self.encoding_periods = encoding_periods #Max period for sinusoïdal positional encoding
+        self.in_channels = in_channels
 
         if pooling_type == "voxel_pooling":
             self.pooling = Pooling2(**pooling_params)
@@ -181,6 +182,10 @@ class BlockDectectGT(nn.Module):
             self.proj = nn.Linear(self.in_gt, in_channels)
         else:
             raise(f"Invalid aggregation between features and positional encoding: {pe_aggr}")
+
+        self.gamma_funct =  nn.Sequential(nn.Linear(1, 12),
+                      nn.SiLU(),
+                      nn.Linear(12, 2*in_channels))
 
 
         self.blockGT = BlockGT(
@@ -206,6 +211,12 @@ class BlockDectectGT(nn.Module):
             data.x = torch.cat((data.x,embed_pos), dim=1)
 
         data.x = self.proj(data.x)
+
+        ##Add information about density of cluster
+
+        c_emb = self.gamma_funct(torch.log(1+data.c.float().unsqueeze(1)))
+
+        data.x = data.x * (1 + c_emb[:,:self.in_channels]) + c_emb[:,self.in_channels:]
 
         data.x = self.blockGT(data)
 

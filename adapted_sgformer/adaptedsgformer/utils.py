@@ -98,6 +98,7 @@ def format_data(data, normalizer=None):
     data.t = None
     data.x = ((1 - data.x)//2).float()
     data.pos = data.pos / normalizer
+    data.c = torch.ones_like(data.batch)
     return data
 
 def check_graphs(data, stage, log_file="graph_debug.log"):

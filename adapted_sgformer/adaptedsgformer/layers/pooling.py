@@ -271,7 +271,9 @@ class Pooling2(nn.Module):
         else:
             x = _avg_pool_x(cluster, data.x)
 
-        new_data = Batch(batch=batch, x=x, edge_index=edge_index, pos=pos)
+        c = torch_scatter.scatter_add(data.c, cluster, dim=0)
+
+        new_data = Batch(batch=batch, x=x, edge_index=edge_index, pos=pos, c=c)
 
         if hasattr(data, "height"):
             new_data.height = data.height
@@ -288,6 +290,7 @@ class Pooling2(nn.Module):
 
         if self.bn is not None:
             new_data = self.bn(new_data)
+
 
         return new_data
 

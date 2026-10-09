@@ -33,7 +33,7 @@ model_params:
     pe_dim: 12
     pe_aggr: 'cat'
     pool_aggr: 'max'
-    threshold: 30
+    # threshold: 0
     keep_temporal_ordering: False
     self_loop: False
     encoding_periods: [1, 1, 1]
