@@ -182,7 +182,7 @@ def postprocess_network_output(prediction, num_classes, batch_size=None ,batch_p
 
         # If none are remaining => process next image
         if len(image_pred) == 0:
-            device = predictions.device
+            device = prediction.device
             output.append({
                 "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
                 "scores": torch.zeros(0, dtype=torch.float, device=device),
@@ -202,7 +202,7 @@ def postprocess_network_output(prediction, num_classes, batch_size=None ,batch_p
             detections = detections[conf_mask]
 
         if len(detections) == 0:
-            device = predictions.device
+            device = prediction.device
             output.append({
                 "boxes": torch.zeros(0, 4, dtype=torch.float32, device=device),
                 "scores": torch.zeros(0, dtype=torch.float, device=device),
