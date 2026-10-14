@@ -1,0 +1,17 @@
+run_name: test
+
+model: dagr
+
+# model_path: ../cluster_checkpoint/logs_dagt/ncaltech101/detection/r32av5d2/best_model_mAP_0.38689766775178447.pth
+model_path: ../cluster_checkpoint/logs/ncaltech101/detection/v6c1mle6/best_model_mAP_0.3932487436288132.pth
+
+data_directory: ../data
+
+dataset: ncaltech101
+
+nb_runs: 5
+
+dataloader:  
+  batch_size : &bs 1
+  num_workers: 8
+  pin_memory: True
