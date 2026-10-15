@@ -280,6 +280,6 @@ if __name__ == '__main__':
     with torch.no_grad():
             mapcalc = run_test(test_loader, ema.ema, dataset=cfg["dataset"])
             metrics = mapcalc.compute()
-            checkpointer.process(metrics, epoch, "test")
+            checkpointer.process(metrics, cfg["max_epochs"] - 1, "test")
 
     wandb.finish()

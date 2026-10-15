@@ -54,6 +54,7 @@ logs/
 
 #test code
 test_codes/
+*/wandb_result.py
 
 #Checkpoints
 
