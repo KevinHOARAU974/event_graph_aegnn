@@ -188,10 +188,9 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, follow_batch=['bbox', 'bbox0'], shuffle=True, drop_last=True, **cfg["dataloader"])
     num_iters_per_epoch = len(train_loader)
 
-    sampler = np.random.permutation(np.arange(len(val_dataset)))
-    val_loader = DataLoader(val_dataset, sampler=sampler, follow_batch=['bbox', 'bbox0'], shuffle=False, drop_last=False, **cfg["dataloader"])
+    val_loader = DataLoader(val_dataset, follow_batch=['bbox', 'bbox0'], shuffle=False, drop_last=False, **cfg["dataloader"])
 
-    test_loader = DataLoader(test_dataset, sampler=sampler, follow_batch=['bbox', 'bbox0'], shuffle=False, drop_last=False, **cfg["dataloader"])
+    test_loader = DataLoader(test_dataset, follow_batch=['bbox', 'bbox0'], shuffle=False, drop_last=False, **cfg["dataloader"])
 
     print(f"height :{train_dataset.height}")
     print(f"width :{train_dataset.width}")
@@ -280,6 +279,6 @@ if __name__ == '__main__':
     with torch.no_grad():
             mapcalc = run_test(test_loader, ema.ema, dataset=cfg["dataset"])
             metrics = mapcalc.compute()
-            checkpointer.process(metrics, epoch, "test")
+            checkpointer.process(metrics, cfg["max_epochs"] - 1, "test")
 
     wandb.finish()

@@ -338,15 +338,15 @@ class BiasSoftmaxTrans(nn.Module):
 
         mul_bias = self.Wa(batch.edge_attr)
         add_att_bias = self.Wb(batch.edge_attr)
+
         add_val_bias = self.Wc(batch.edge_attr).reshape(-1, self.num_heads, self.head_dim)
+        far_val_bias = self.Wc(self.pc).reshape(self.num_heads, self.head_dim)
 
         mul_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=mul_bias.device, dtype=mul_bias.dtype) * self.Wa(self.pa).view(1, self.num_heads, 1, 1)
         add_att_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax), device=add_att_bias.device, dtype=add_att_bias.dtype) * self.Wb(self.pb).view(1, self.num_heads, 1, 1)
-        add_val_bias_dense = torch.ones((batch_size, self.num_heads, Nmax, Nmax, self.head_dim), device=add_val_bias.device, dtype=add_val_bias.dtype) * self.Wc(self.pc).view(1, self.num_heads, 1, 1, self.head_dim)
-
+        
         mul_bias_dense[batch_edge, :, dst_loc, src_loc] = mul_bias
         add_att_bias_dense[batch_edge, :, dst_loc, src_loc] = add_att_bias
-        add_val_bias_dense[batch_edge, :, dst_loc, src_loc, :] = add_val_bias 
 
         attn_bias  = attn * mul_bias_dense
         attn_bias *= self.scale
@@ -362,7 +362,20 @@ class BiasSoftmaxTrans(nn.Module):
         out_v = torch.einsum("bhnj, bjhd -> bnhd", attn_bias, vs)
 
         #out bias edge
-        out_edge = torch.einsum("bhnj,bhnjd->bnhd", attn_bias, add_val_bias_dense)
+        
+        edge_attn = attn_bias[batch_edge, : , dst_loc, src_loc]
+        edge_correction = (add_val_bias - far_val_bias.unsqueeze(0))
+        edge_messages = (edge_attn.unsqueeze(-1) * edge_correction)
+
+        out_edge = torch.zeros_like(out_v)
+
+        out_edge.index_put_((batch_edge, dst_loc), edge_messages, accumulate=True)
+
+        attn_sum = attn_bias.sum(dim=-1)
+
+        out_edge += (attn_sum.permute(0, 2, 1).unsqueeze(-1) * far_val_bias.view(1, 1, self.num_heads, self.head_dim))
+
+        # out_edge = torch.einsum("bhnj,bhnjd->bnhd", attn_bias, add_val_bias_dense)
 
         out = out_v + out_edge
 
@@ -373,8 +386,6 @@ class BiasSoftmaxTrans(nn.Module):
 
         return out
         
-
-
 
 class TransConv(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_layers=2, num_heads=1,
