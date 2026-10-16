@@ -298,6 +298,28 @@ class BiasSoftmaxTrans(nn.Module):
 
         self.Wo = nn.Linear(out_channels, out_channels)
 
+        self.reset_bias_parameters()
+
+    def reset_bias_parameters(self):
+        with torch.no_grad():
+            # Biais multiplicatif : proche de 1
+            nn.init.xavier_uniform_(self.Wa.weight, gain=0.1)
+            nn.init.ones_(self.Wa.bias)
+
+            # Biais additif d'attention : proche de 0
+            nn.init.normal_(self.Wb.weight, mean=0.0, std=0.01)
+            nn.init.zeros_(self.Wb.bias)
+
+            # Biais additif des valeurs : proche de 0
+            nn.init.normal_(self.Wc.weight, mean=0.0, std=0.01)
+            nn.init.zeros_(self.Wc.bias)
+
+            # Paramètres des paires sans arête
+            nn.init.zeros_(self.pa)
+            nn.init.zeros_(self.pb)
+            nn.init.zeros_(self.pc)
+
+
     def forward(self, batch: Batch):
 
         #B : Batch size
