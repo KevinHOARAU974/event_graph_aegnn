@@ -24,10 +24,10 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    first_trans_block: False
+    first_trans_block: True
     hidden_channels_list: [36, 48, 64, 64, 64]
-    attn_type_block_list: ['cat', 'cat', 'bias', 'bias']
-    pooling_type_list: ['uniform_sampling', 'uniform_sampling', 'uniform_sampling', 'voxel_pooling']
+    attn_type_block_list: ['cat', 'cat', 'cat', 'bias', 'bias']
+    pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'
     # final_size: 16
     pe_dim: 12
@@ -35,8 +35,8 @@ model_params:
     pool_aggr: 'max'
     keep_temporal_ordering: False
     self_loop: False
-    encoding_periods: [1, 1, 1]
-    factors: [1,1,1]
+    encoding_periods: &ep [240, 180]
+    factors: *ep
     num_heads: 4
     dropout_attn: 0.1
     dropout_trans: 0.1

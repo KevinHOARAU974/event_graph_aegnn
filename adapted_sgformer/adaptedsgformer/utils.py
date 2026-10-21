@@ -96,7 +96,10 @@ def format_data(data, normalizer=None):
 
     data.pos = torch.cat([data.pos, data.t.view((-1,1))], dim=-1)
     data.t = None
-    data.x = ((1 - data.x)//2).float()
+    if data.x.float().min() != 0:
+        data.x = ((1 - data.x)//2).float()
+    else:
+        data.x = data.x.float()
     data.pos = data.pos / normalizer
     return data
 
