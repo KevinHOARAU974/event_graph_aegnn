@@ -126,6 +126,7 @@ class BackboneGT(nn.Module):
                                 }
                 
                 if pooling_type_list[i] == 'voxel_pooling':
+                    cart = T.Cartesian(norm=True, cat=False, max_value=max_vals_for_cartesian[i])
                     pooling_params = {  
                                         "size": self.poolings[i],
                                         "in_channels": hidden_channels_list[i],
@@ -134,7 +135,7 @@ class BackboneGT(nn.Module):
                                         "aggr": pool_aggr,
                                         "keep_temporal_ordering":keep_temporal_ordering,
                                         "self_loop":self_loop,
-                                        "transform": None,
+                                        "transform": cart,
                                     }
                 elif pooling_type_list[i] == 'uniform_sampling':
                     pooling_params = {  

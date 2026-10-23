@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from torch_geometric.data import Batch
 from torch_geometric.utils import to_dense_batch
 
+from dagr.model.layers.spline_conv import MySplineConv
+from argparse import Namespace
+
 from torch import Tensor
 
 # Adapted self Attention layer of SGFormer
@@ -127,6 +130,11 @@ class TransLayerMultiHead(nn.Module):
         self.num_heads = num_heads
         self.use_weight = use_weight
 
+        args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
+        self.splineConv = MySplineConv(in_channels, out_channels, args)
+
+        self.alpha = 0.5
+
         self.Wo = nn.Linear(out_channels, out_channels)
 
     def reset_parameters(self):
@@ -143,6 +151,8 @@ class TransLayerMultiHead(nn.Module):
         #H : Number of Heads
         #I : Input size
         #M : Output size
+
+        out_local = self.splineConv(batch.clone())
 
         # Groupe by graph in order to have global attention by graph in batch
         x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
@@ -197,7 +207,9 @@ class TransLayerMultiHead(nn.Module):
         attn_output = attn_output[mask_dense]
 
         attn_output = attn_output.reshape(attn_output.size(0), self.out_channels)
-        final_output = self.Wo(attn_output)
+        proj_output = self.Wo(attn_output)
+
+        final_output = self.alpha*proj_output + (1 - self.alpha)*out_local.x 
             
 
         if output_attn:
