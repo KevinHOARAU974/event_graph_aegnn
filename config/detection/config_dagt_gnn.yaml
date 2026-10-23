@@ -24,9 +24,9 @@ model_params:
   backbone:
     in_channels: 24
     num_blocks: 4
-    first_trans_block: False
+    first_trans_block: True
     hidden_channels_list: [36, 48, 64, 64, 64]
-    attn_type_block_list: ['cat', 'cat', 'bias', 'bias']
+    attn_type_block_list: ['cat','cat', 'cat', 'bias', 'bias']
     pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'
     # final_size: 16

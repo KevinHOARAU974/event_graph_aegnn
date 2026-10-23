@@ -69,6 +69,9 @@ class BackboneGT(nn.Module):
             self.first_trans_block = first_trans_block
     
             self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
+
+            effective_radius = 2*float(int(0.01 * width + 2) / width)
+            self.edge_attrs = T.Cartesian(norm=True, cat=False, max_value=effective_radius)
     
             self.pe_aggr = pe_aggr
     
@@ -114,7 +117,7 @@ class BackboneGT(nn.Module):
     
             self.num_blocks = num_blocks
             self.block_dagt = nn.ModuleList()
-    
+
             #Num linear attention block
             for i in range(num_blocks):
 
@@ -177,7 +180,7 @@ class BackboneGT(nn.Module):
         data = self.events_to_graph(data)
 
         # check_graphs(data, "Après ev_to_gr")
-
+        data = self.edge_attrs(data)
         #Embedding
 
         embed_pos = torch.stack([
