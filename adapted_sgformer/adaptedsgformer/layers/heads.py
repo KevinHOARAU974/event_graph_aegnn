@@ -11,7 +11,7 @@ from yolox.utils import bboxes_iou
 from dagr.model.layers.conv import ConvBlock
 from dagr.model.utils import shallow_copy, init_grid_and_stride
 
-from adaptedsgformer.layers.spline_conv import SplineConvToDense,MySplineConv
+from adaptedsgformer.layers.conv import SplineConvToDense,MySplineConv
 
 from loguru import logger
 

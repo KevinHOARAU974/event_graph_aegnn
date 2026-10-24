@@ -15,3 +15,5 @@ class SplineConvToDense(MySplineConv):
 
     def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
         return to_dense(self, x, pos, pooling, batch, batch_size=batch_size)
+    
+    
