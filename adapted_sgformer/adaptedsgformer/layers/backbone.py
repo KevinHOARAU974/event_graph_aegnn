@@ -21,6 +21,8 @@ class BackboneGT(nn.Module):
                     first_trans_block = True,
                     hidden_channels_list=[32, 48, 64, 64, 64],
                     attn_type_block_list=['cat','cat', 'cat', 'cat', 'bias'],
+                    local_type_list = ['small', 'small','small', 'small', 'None'],
+                    alpha = 0.5,
                     pooling_type_list = ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling'],
                     last_voxel_div ='5x7', #voxel division of the last DAGT block
                     final_size = 16, # Final size of pooling
@@ -103,6 +105,8 @@ class BackboneGT(nn.Module):
 
                 block_gt_params={
                                         "num_heads": num_heads,
+                                        "local" : local_type_list[0],
+                                        "alpha" : alpha,
                                         "dropout_trans": dropout_trans,
                                         "dropout_ff": dropout_ff,
                                         "norm_func": norm_func,
@@ -122,6 +126,8 @@ class BackboneGT(nn.Module):
             for i in range(num_blocks):
 
                 block_gt_params = {"num_heads": num_heads,
+                                    "local" : local_type_list[0],
+                                    "alpha" : alpha,
                                     "dropout_trans": dropout_trans,
                                     "dropout_ff": dropout_ff,
                                     "norm_func": norm_func,

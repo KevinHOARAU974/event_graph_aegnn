@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from torch_geometric.data import Batch
 from torch_geometric.utils import to_dense_batch
 
+from adaptedsgformer.layers.conv import SmallGraphConv
+
 from dagr.model.layers.spline_conv import MySplineConv
 from argparse import Namespace
 
@@ -114,6 +116,8 @@ class TransLayerMultiHead(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
+                 local = None,
+                 alpha = 0.5,
                  use_weight=True):
         super().__init__()
 
@@ -130,10 +134,16 @@ class TransLayerMultiHead(nn.Module):
         self.num_heads = num_heads
         self.use_weight = use_weight
 
-        args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
-        self.splineConv = MySplineConv(in_channels, out_channels, args)
+        self.local = local
+        if local == 'spline':
+            args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
+            self.conv = MySplineConv(in_channels, out_channels, args)
+        elif local== 'small':
+            self.conv = SmallGraphConv(in_channels, out_channels)
+        else:
+            self.conv = None
 
-        self.alpha = 0.5
+        self.alpha = alpha
 
         self.Wo = nn.Linear(out_channels, out_channels)
 
@@ -151,8 +161,9 @@ class TransLayerMultiHead(nn.Module):
         #H : Number of Heads
         #I : Input size
         #M : Output size
-
-        out_local = self.splineConv(batch.clone())
+        
+        if self.conv is not None:
+            out_local = self.conv(batch.clone())
 
         # Groupe by graph in order to have global attention by graph in batch
         x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
@@ -209,9 +220,11 @@ class TransLayerMultiHead(nn.Module):
         attn_output = attn_output.reshape(attn_output.size(0), self.out_channels)
         proj_output = self.Wo(attn_output)
 
-        final_output = self.alpha*proj_output + (1 - self.alpha)*out_local.x 
+        if self.conv is not None:
+            final_output = self.alpha*proj_output + (1 - self.alpha)*out_local.x 
+        else:
+            final_output = proj_output
             
-
         if output_attn:
             return final_output, attention
         else:

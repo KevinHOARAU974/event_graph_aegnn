@@ -1,4 +1,7 @@
 import torch
+import torch.nn as nn
+
+from torch_sparse import SparseTensor, matmul
 
 from torch_geometric.data import Data
 from dagr.model.layers.spline_conv import MySplineConv
@@ -16,4 +19,23 @@ class SplineConvToDense(MySplineConv):
     def to_dense(self, x, pos, pooling, batch=None, batch_size=None):
         return to_dense(self, x, pos, pooling, batch, batch_size=batch_size)
     
-    
+class SmallGraphConv(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+        super(SmallGraphConv,self).__init__()
+
+        self.W = nn.Linear(in_channels, out_channels)
+
+    def forward(self, batch):
+
+        N = batch.x.shape[0]
+        row, column = batch.edge_index
+        distance = torch.norm(batch.edge_attr, dim=-1)
+        value = 1 / distance
+        value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
+        adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
+        x = matmul(adj, batch.x)
+
+        batch.x = self.W(x)
+
+        return batch
