@@ -203,8 +203,8 @@ class BlockDectectGT(nn.Module):
 
         data = self.pooling(batch)
 
-        if self.sparse:
-            data = deg_tokenize(data, r=getattr(self.pooling, 'radius'), max_neighbors=299)
+        # if self.sparse:
+        #     data = deg_tokenize(data, r=getattr(self.pooling, 'radius'), max_neighbors=299)
 
         embed_pos = torch.stack([
             embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim // 3, max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
@@ -217,10 +217,10 @@ class BlockDectectGT(nn.Module):
         elif self.pe_aggr == "cat":
             data.x = torch.cat((data.x, embed_pos), dim=1)
 
-        # Degree tokenizer
-        if self.sparse:
-            x = torch.stack([data.x, data.x * data.log_deg[:, None]], dim=-1)
-            data.x = (x * self.deg_coef).sum(dim=-1)
+        # # Degree tokenizer
+        # if self.sparse:
+        #     x = torch.stack([data.x, data.x * data.log_deg[:, None]], dim=-1)
+        #     data.x = (x * self.deg_coef).sum(dim=-1)
 
         data.x = self.proj(data.x)
 

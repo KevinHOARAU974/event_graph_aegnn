@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import torch_geometric.transforms as T
 from torch_geometric.utils import to_undirected
-from torch_geometric.data import Batch
+from torch_geometric.data import Batch, Data
 
 # from dagr.model.networks.net import compute_pooling_at_each_layer
 from adaptedsgformer.utils import compute_pooling_at_each_layer
@@ -73,7 +73,7 @@ class BackboneGT(nn.Module):
 
         self.first_trans_block = first_trans_block
 
-        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
+        self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=3) #### Changed to 3 to accomodate anchor nodes
 
         self.pe_aggr = pe_aggr
 
@@ -186,16 +186,70 @@ class BackboneGT(nn.Module):
             nn.init.xavier_normal_(self.deg_coef)
 
 
+    def add_anchor_nodes(self, batch):
+
+        device = batch.x.device
+
+        # Anchor node positions
+        hsize, wsize = self.poolings[-1, :2]
+        y, x = torch.meshgrid([torch.arange(0, 1, hsize), torch.arange(0, 1, wsize)], indexing='ij')
+        a_coords = torch.stack([y, x], dim=2).flatten(end_dim=1)
+        a_coords = a_coords + torch.tensor([hsize, wsize])[None] * 0.5
+        assert a_coords.size(0) == self.samplings[-1]
+
+        ## Add anchor nodes positioned regularly on the output grid, initialized with a nn.Parameter
+        batch_list = []
+
+        for b in range(batch.num_graphs):
+            graph = batch.get_example(b)
+            
+            mean_t = graph.pos.new_ones(len(a_coords)) * graph.pos[:, -1].mean()
+            pos = torch.cat([
+                graph.pos, 
+                torch.cat([a_coords.to(device), mean_t[:, None]], dim=1)
+            ])
+
+            a_polarity = graph.x.new_ones(len(a_coords)) * 2
+            polarity = torch.cat([
+                graph.x,
+                a_polarity[:, None]
+            ])
+
+            is_anchor = torch.cat([
+                graph.x.new_zeros(graph.x.shape),
+                graph.x.new_ones(len(a_coords))[:, None]
+            ])
+
+            feature_dict = dict(
+                x=polarity,
+                pos=pos,
+                is_anchor=is_anchor,
+                width=graph.width, 
+                height=graph.height, 
+                time_window=graph.time_window
+            )
+            
+            new_graph = Data(**feature_dict)
+            batch_list.append(new_graph)
+
+        data_batch = Batch.from_data_list(batch_list)
+
+        return data_batch
+
+
     def forward(self, batch :Batch):
         
         device = next(self.parameters()).device
-        data = batch.clone().to(device)
 
         # check_graphs(batch, "DataLoader")
         if not self.sparse:
+            data = batch.clone().to(device)
             data = self.events_to_graph(data)
         else:
-            data = deg_tokenize(data, r=self.radii[0], max_neighbors=299)
+            data = self.add_anchor_nodes(batch.clone()).to(device)
+
+        # else:
+        #     data = deg_tokenize(data, r=self.radii[0], max_neighbors=299)
 
         # check_graphs(data, "Après ev_to_gr")
 
@@ -216,10 +270,10 @@ class BackboneGT(nn.Module):
 
         # check_graphs(data, "BACKBONE INPUT")
 
-        # Degree tokenizer
-        if self.sparse:
-            x = torch.stack([data.x, data.x * data.log_deg[:, None]], dim=-1)
-            data.x = (x * self.deg_coef).sum(dim=-1)
+        # # Degree tokenizer
+        # if self.sparse:
+        #     x = torch.stack([data.x, data.x * data.log_deg[:, None]], dim=-1)
+        #     data.x = (x * self.deg_coef).sum(dim=-1)
 
         data.x = self.proj(data.x)
 
@@ -232,13 +286,17 @@ class BackboneGT(nn.Module):
             data = self.block_dagt[i](data)
             # check_graphs(data, f"AFTER BLOCK {i+1}")
 
-        if getattr(self.block_dagt[-1].pooling, "voxel_size", None) is not None:
-            data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
+        # if getattr(self.block_dagt[-1].pooling, "voxel_size", None) is not None:
+        #     data.pooling = self.block_dagt[-1].pooling.voxel_size[:3]
+
+        data.pooling = self.poolings[-1].to(device)
 
         # Post pro for sparse pipeline
         if self.sparse:
+
             # Construct the graph at the end of the backbone with a maximal radius
-            # data = self.events_to_graph(data)
+            assert self.events_to_graph.radius == 1, 'Kevin mets le radius à 1 stp !!'
+            data = self.events_to_graph(data)
 
             edge_index = to_undirected(data.edge_index, data.num_nodes)
             # Remove self loops

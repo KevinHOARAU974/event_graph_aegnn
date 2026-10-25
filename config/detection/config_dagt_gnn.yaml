@@ -14,7 +14,7 @@ data_directory: "../data/"
 exp_name: "test"
 
 dataloader:  
-  batch_size : &bs 8
+  batch_size : &bs 4
   num_workers: 8
   pin_memory: True
 
@@ -25,7 +25,9 @@ model_params:
     first_trans_block: True
     hidden_channels_list: [36, 48, 64, 64, 64]
     attn_type_block_list: ['cat', 'cat', 'cat', 'bias', 'bias']
+    # attn_type_block_list: ['cat', 'cat', 'cat', 'cat', 'cat']
     pooling_type_list: ['uniform_sampling', 'uniform_sampling', 'uniform_sampling', 'uniform_sampling']
+    # pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'
     # final_size: 16
     pe_dim: 12
@@ -42,7 +44,7 @@ model_params:
     norm_func: 'layer'
     num_scales: &ns 1
     args_gr:
-      radius: 0.1
+      radius: 1.0
       max_neighbors: 999
 
   head:

@@ -271,19 +271,100 @@ class UniformSampling(nn.Module):
         self.aggr = aggr
         self.radius = radius
         # self.proj = nn.Linear(dim, dim)
-        self.pool = NeighborPooling(aggr)
+        # self.pool = NeighborPooling(aggr)
 
-        print(aggr)
+        # print(aggr)
+
+
+    # def forward(self, batch):
+
+    #     device = batch.x.device
+
+    #     # Pooling as message passing
+    #     assert batch.edge_index is not None
+    #     batch.x = self.pool(batch.edge_index, batch.x)
+
+    #     # Centroid selection, then construction of the graph based on current layer's resolution given by self.radius
+
+    #     batch_list = []
+
+    #     for b in range(batch.num_graphs):
+    #         graph = batch.get_example(b)
+    #         N = graph.num_nodes
+            
+    #         # Random cluster center selection
+    #         chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
+    #         chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
+    #         anchor_coords = graph.pos[chosen_nodes]
+
+    #         # Distance matrix, shape (self.n_sample x self.n_sample)
+    #         dist_mat = (anchor_coords[:, None] - anchor_coords[None]).norm(dim=-1)
+
+    #         feature_dict = dict(
+    #             x=graph.x[chosen_nodes],
+    #             pos=anchor_coords,
+    #             width=graph.width, 
+    #             height=graph.height, 
+    #             time_window=graph.time_window
+    #         )
+
+    #         if self.save_dist:
+    #             feature_dict.update({'dist_mat': dist_mat})
+            
+    #         new_graph = Data(**feature_dict)
+    #         batch_list.append(new_graph)
+
+    #     data_batch = Batch.from_data_list(batch_list)
+
+    #     return data_batch
+
+
+    # def forward(self, batch):
+
+    #     device = batch.x.device
+
+    #     batch_list = []
+
+    #     for b in range(batch.num_graphs):
+    #         graph = batch.get_example(b)
+    #         N = graph.num_nodes
+            
+    #         # Random cluster center selection
+    #         chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
+    #         chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
+    #         anchor_coords = graph.pos[chosen_nodes]
+
+    #         # Distance matrix, shape (N x self.n_sample)
+    #         dist_mat = (graph.pos[:, None] - anchor_coords[None]).norm(dim=-1)
+
+    #         # Calculate node assignment to the closest anchor node
+    #         assignments = torch.argmin(dist_mat, dim=-1)
+
+    #         # Max pooling of node features
+    #         pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
+
+    #         feature_dict = dict(
+    #             x=pooled_features,
+    #             pos=anchor_coords,
+    #             width=graph.width, 
+    #             height=graph.height, 
+    #             time_window=graph.time_window
+    #         )
+
+    #         if self.save_dist:
+    #             feature_dict.update({'dist_mat': dist_mat[chosen_nodes]})
+            
+    #         new_graph = Data(**feature_dict)
+    #         batch_list.append(new_graph)
+
+    #     data_batch = Batch.from_data_list(batch_list)
+
+    #     return data_batch
+
 
     def forward(self, batch):
 
         device = batch.x.device
-
-        # Pooling as message passing
-        assert batch.edge_index is not None
-        batch.x = self.pool(batch.edge_index, batch.x)
-
-        # Centroid selection, then construction of the graph based on current layer's resolution given by self.radius
 
         batch_list = []
 
@@ -291,34 +372,40 @@ class UniformSampling(nn.Module):
             graph = batch.get_example(b)
             N = graph.num_nodes
             
-            # Random cluster center selection
-            chosen_nodes = np.random.choice(np.arange(N), self.n_sample, replace=False)
-            chosen_nodes = torch.from_numpy(np.sort(chosen_nodes)).to(device)
-            anchor_coords = graph.pos[chosen_nodes]
+            # Cluster centroid selection
+            anchor_idx = (graph.is_anchor[:, 0] == 1).cpu().numpy()
 
-            # chosen_nodes = torch.linspace(0, N-1, steps=self.n_sample, dtype=int)
-            # anchor_coords = graph.pos[chosen_nodes]
+            node_idx = np.arange(N)[~anchor_idx]
+            chosen_nodes = np.arange(N)[anchor_idx]
+            is_anchor = torch.ones(len(chosen_nodes), device=device)
+
+            n_additional_centroids = self.n_sample - len(chosen_nodes)
+            if n_additional_centroids > 0:
+                chosen_nodes = np.concatenate([chosen_nodes, np.random.choice(node_idx, n_additional_centroids, replace=False)])
+                is_anchor = torch.cat([is_anchor, is_anchor.new_zeros(n_additional_centroids)])
+
+            centroids_pos = graph.pos[chosen_nodes]
 
             # Distance matrix, shape (N x self.n_sample)
-            dist_mat = (anchor_coords[:, None] - anchor_coords[None]).norm(dim=-1)
+            dist_mat = (graph.pos[:, None] - centroids_pos[None]).norm(dim=-1)
 
-            # # Calculate node assignment to the closest anchor node
-            # assignments = torch.argmin(dist_mat, dim=-1)
+            # Calculate node assignment to the closest anchor node
+            assignments = torch.argmin(dist_mat, dim=-1)
 
-            # # Max pooling of node features
-            # pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
-            # features = graph.x[chosen_nodes] + self.proj(pooled_features)
+            # Max pooling of node features
+            pooled_features = torch_scatter.scatter(graph.x, assignments, dim=0, dim_size=self.n_sample, reduce=self.aggr)
 
             feature_dict = dict(
-                x=graph.x[chosen_nodes],
-                pos=anchor_coords,
+                x=pooled_features,
+                pos=centroids_pos,
                 width=graph.width, 
                 height=graph.height, 
-                time_window=graph.time_window
+                time_window=graph.time_window,
+                is_anchor=is_anchor[:, None]
             )
 
             if self.save_dist:
-                feature_dict.update({'dist_mat': dist_mat})
+                feature_dict.update({'dist_mat': dist_mat[chosen_nodes]})
             
             new_graph = Data(**feature_dict)
             batch_list.append(new_graph)
@@ -326,6 +413,7 @@ class UniformSampling(nn.Module):
         data_batch = Batch.from_data_list(batch_list)
 
         return data_batch
+
 
 
 class NeighborPooling(MessagePassing):

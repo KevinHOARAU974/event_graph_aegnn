@@ -26,10 +26,10 @@ class DetectionGT(YOLOX):
             in_channels=backbone.hidden_channels_list[-backbone.num_scales:], 
             args=Namespace(**args['head'])
         )
-        if args['backbone']['pooling_type_list'][0] == 'uniform_sampling':
-            head = SparseYoloxHead(**head_args)
-        else:
-            head = GNNHead(**head_args)
+        # if args['backbone']['pooling_type_list'][0] == 'uniform_sampling':
+        #     head = SparseYoloxHead(**head_args)
+        # else:
+        head = GNNHead(**head_args)
         
         super().__init__(backbone, head)
 
