@@ -41,8 +41,10 @@ class BlockGT(nn.Module):
 
         if attn_block_type == 'mean':
             self.trans = TransConvLayer(in_channels, out_channels, num_heads)
-        elif attn_block_type == 'cat':
-            self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads, local=local, alpha=alpha)
+        elif attn_block_type == 'cat' or attn_block_type == 'None':
+            self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads, local=local,
+                                            global_attn= False if attn_block_type=='None' else True,
+                                            alpha=alpha)
         elif attn_block_type == 'softmax':
             self.trans = SoftmaxTrans(in_channels, out_channels, num_heads)
         elif attn_block_type == 'bias':
