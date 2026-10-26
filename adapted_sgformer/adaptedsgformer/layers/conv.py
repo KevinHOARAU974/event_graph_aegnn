@@ -4,6 +4,8 @@ import torch.nn as nn
 from torch_sparse import SparseTensor, matmul
 
 from torch_geometric.data import Data
+from torch_geometric.utils import degree
+
 from dagr.model.layers.spline_conv import MySplineConv
 
 from adaptedsgformer.utils import to_dense
@@ -30,12 +32,13 @@ class SmallGraphConv(nn.Module):
 
         N = batch.x.shape[0]
         row, column = batch.edge_index
+        d = degree(column, N).float()
         distance = torch.norm(batch.edge_attr, dim=-1)
         value = 1 / distance
         value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
         adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
-        x = matmul(adj, batch.x)
-
+        x = matmul(adj, batch.x) /d.unsqueeze(-1)
+    
         batch.x = self.W(x)
 
         return batch

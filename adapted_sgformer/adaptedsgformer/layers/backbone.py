@@ -116,6 +116,7 @@ class BackboneGT(nn.Module):
                 self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **block_gt_params)
                 
                 attn_type_block_list = attn_type_block_list[1:]
+                local_type_list = local_type_list[1:]
             else:
                 self.proj = nn.Linear(self.in_proj, hidden_channels_list[0])
     

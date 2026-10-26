@@ -28,7 +28,7 @@ model_params:
     hidden_channels_list: [36, 48, 64, 64, 64]
     attn_type_block_list: ['cat','cat', 'cat', 'bias', 'bias']
     local_type_list: ['small', 'small','small', 'None', 'None']
-    alpha: 0.5
+    alpha: 0.8
     pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'
     # final_size: 16

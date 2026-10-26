@@ -145,6 +145,8 @@ class TransLayerMultiHead(nn.Module):
 
         self.alpha = alpha
 
+        print(self.alpha)
+
         self.Wo = nn.Linear(out_channels, out_channels)
 
     def reset_parameters(self):
