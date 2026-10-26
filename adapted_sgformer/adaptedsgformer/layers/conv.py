@@ -33,12 +33,20 @@ class SmallGraphConv(nn.Module):
         N = batch.x.shape[0]
         row, column = batch.edge_index
         d = degree(column, N).float()
+
+        print("Nœuds isolés :", (d == 0).sum().item())
+        print("Degré min :", d.min().item())
+
         distance = torch.norm(batch.edge_attr, dim=-1)
         value = 1 / distance
         value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
         adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
-        x = matmul(adj, batch.x) /d.unsqueeze(-1)
-    
+        x = matmul(adj, batch.x) / d.clamp_min(1).unsqueeze(-1)
+
+        assert torch.isfinite(x).all(), "NaN ou Inf après agrégation"
+
         batch.x = self.W(x)
 
+        assert torch.isfinite(batch.x).all(), "NaN ou Inf après projection"
+        
         return batch
