@@ -24,7 +24,7 @@ class BlockGT(nn.Module):
                  out_channels,
                  num_heads,
                  global_attn = True,
-                 local = None,
+                 local = 'None',
                  alpha = 0.5,
                  dropout_attn=0.0,
                  dropout_trans = 0.0,
@@ -35,6 +35,7 @@ class BlockGT(nn.Module):
         super(BlockGT, self).__init__()
 
         self.in_channels = in_channels
+        self.out_channels = out_channels
 
         self.global_attn = global_attn
         if global_attn:
