@@ -27,14 +27,14 @@ class SmallGraphConv(nn.Module):
         super(SmallGraphConv,self).__init__()
 
         self.W = nn.Linear(in_channels, out_channels)
+        self.W_edge = nn.Linear(3, 1)
 
     def forward(self, batch):
 
         N = batch.x.shape[0]
         row, column = batch.edge_index
         d = degree(column, N).float()
-        distance = torch.norm(batch.edge_attr, dim=-1)
-        value = 1 / distance
+        value = torch.sigmoid(self.W_edge(batch.edge_attr)).squeeze(-1)
         value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
         adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
         x = matmul(adj, batch.x) / d.clamp_min(1).unsqueeze(-1)
