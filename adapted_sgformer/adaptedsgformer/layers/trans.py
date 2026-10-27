@@ -5,8 +5,6 @@ import torch.nn.functional as F
 from torch_geometric.data import Batch
 from torch_geometric.utils import to_dense_batch
 
-from adaptedsgformer.layers.conv import SmallGraphConv
-
 from dagr.model.layers.spline_conv import MySplineConv
 from argparse import Namespace
 
@@ -116,49 +114,28 @@ class TransLayerMultiHead(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
-                 global_attn = True, 
-                 local = None,
-                 alpha = 0.5,
                  use_weight=True):
         super().__init__()
 
         assert out_channels % num_heads == 0
-        assert global_attn == True or local != 'None'
+        self.head_dim = out_channels // num_heads
+
+
+        self.Wk = nn.Linear(in_channels, out_channels)
+        self.Wq = nn.Linear(in_channels, out_channels)
+        if use_weight:
+            self.Wv = nn.Linear(in_channels, out_channels)
 
         self.out_channels = out_channels
+        self.num_heads = num_heads
+        self.use_weight = use_weight
 
-        self.global_attn = global_attn
-        if self.global_attn:
+        # args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
+        # self.splineConv = MySplineConv(in_channels, out_channels, args)
 
-            self.head_dim = out_channels // num_heads
+        # self.alpha = 0.5
 
-
-            self.Wk = nn.Linear(in_channels, out_channels)
-            self.Wq = nn.Linear(in_channels, out_channels)
-            if use_weight:
-                self.Wv = nn.Linear(in_channels, out_channels)
-                
-            self.num_heads = num_heads
-            self.use_weight = use_weight
-
-            self.Wo = nn.Linear(out_channels, out_channels)
-
-        self.local = local
-        if local == 'spline':
-            args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
-            self.conv = MySplineConv(in_channels, out_channels, args)
-        elif local== 'small':
-            self.conv = SmallGraphConv(in_channels, out_channels)
-        else:
-            self.conv = None
-
-        if self.global_attn and self.local != 'None':
-            self.alpha = alpha
-        elif self.global_attn:
-            self.alpha = 1
-        else:
-            self.alpha = 0
-
+        self.Wo = nn.Linear(out_channels, out_channels)
 
     def reset_parameters(self):
         self.Wk.reset_parameters()
@@ -166,7 +143,14 @@ class TransLayerMultiHead(nn.Module):
         if self.use_weight:
             self.Wv.reset_parameters()
 
-    def global_attention(self, batch : Batch):
+    def forward(self, batch: Batch, output_attn=False):
+        # feature transformation
+
+        #B : Batch size
+        #Nmax : number of nodes of the largest graph in the batch
+        #H : Number of Heads
+        #I : Input size
+        #M : Output size
 
         # Groupe by graph in order to have global attention by graph in batch
         x, mask_dense = to_dense_batch(batch.x, batch.batch) #[B, Nmax, I]
@@ -213,47 +197,23 @@ class TransLayerMultiHead(nn.Module):
         attn_output = attention_num / attention_normalizer  # [B,Nmax, H, D]
 
         # compute attention for visualization if needed
-        # if output_attn:
-        #     attention = torch.einsum("bnhm,blhm->bnlh", qs, ks).mean(dim=-1)  # [Nmax, Nmax]
-        #     normalizer = attention_normalizer.squeeze(dim=-1).mean(dim=-1, keepdims=True)  # [Nmax,1]
-        #     attention = attention / normalizer
+        if output_attn:
+            attention = torch.einsum("bnhm,blhm->bnlh", qs, ks).mean(dim=-1)  # [Nmax, Nmax]
+            normalizer = attention_normalizer.squeeze(dim=-1).mean(dim=-1, keepdims=True)  # [Nmax,1]
+            attention = attention / normalizer
         
         attn_output = attn_output[mask_dense]
 
         attn_output = attn_output.reshape(attn_output.size(0), self.out_channels)
         proj_output = self.Wo(attn_output)
 
-        return proj_output
+        final_output = proj_output
+            
 
-
-    def forward(self, batch: Batch, output_attn=False):
-        # feature transformation
-
-        #B : Batch size
-        #Nmax : number of nodes of the largest graph in the batch
-        #H : Number of Heads
-        #I : Input size
-        #M : Output size
-        
-        if self.conv is not None:
-            out_local = self.conv(batch.clone()).x
+        if output_attn:
+            return final_output, attention
         else:
-            out_local = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
-
-        if self.global_attn:
-        # Groupe by graph in order to have global attention by graph in batch
-            out_global = self.global_attention(batch.clone())
-        else:
-            out_global = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
-
-        final_output = self.alpha*out_global + (1 - self.alpha)*out_local
-
-        return final_output
-
-        # if output_attn:
-        #     return final_output, attention
-        # else:
-        #     return final_output
+            return final_output
 
 
 class SoftmaxTrans(nn.Module):

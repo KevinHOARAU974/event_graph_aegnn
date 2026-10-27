@@ -9,7 +9,13 @@ from torch_geometric.nn.norm import BatchNorm, LayerNorm
 
 from adaptedsgformer.layers.pooling import Pooling, Pooling2, UniformSampling
 from adaptedsgformer.layers.trans import TransConvLayer, TransLayerMultiHead, SoftmaxTrans, BiasSoftmaxTrans
+from adaptedsgformer.layers.conv import SmallGraphConv
 from adaptedsgformer.utils import embed_1D_scalar
+
+from dagr.model.layers.spline_conv import MySplineConv
+
+from argparse import Namespace
+
 
 
 class BlockGT(nn.Module):
@@ -17,6 +23,7 @@ class BlockGT(nn.Module):
     def __init__(self, in_channels,
                  out_channels,
                  num_heads,
+                 global_attn = True,
                  local = None,
                  alpha = 0.5,
                  dropout_attn=0.0,
@@ -27,59 +34,89 @@ class BlockGT(nn.Module):
                  ):
         super(BlockGT, self).__init__()
 
-        if norm_func == 'layer':
-            norm = LayerNorm
-        elif norm_func == 'batch':
-            norm = BatchNorm
+        self.in_channels = in_channels
 
-        if in_channels != out_channels:
-            self.proj = nn.Linear(in_channels, out_channels)
+        self.global_attn = global_attn
+        if global_attn:
+
+            if norm_func == 'layer':
+                norm = LayerNorm
+            elif norm_func == 'batch':
+                norm = BatchNorm
+
+            if in_channels != out_channels:
+                self.proj = nn.Linear(in_channels, out_channels)
+            else:
+                self.proj = nn.Identity()
+
+            self.norm1 = norm(in_channels) 
+
+            if attn_block_type == 'mean':
+                self.trans = TransConvLayer(in_channels, out_channels, num_heads)
+            elif attn_block_type == 'cat' or attn_block_type == 'None':
+                self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads)
+            elif attn_block_type == 'softmax':
+                self.trans = SoftmaxTrans(in_channels, out_channels, num_heads)
+            elif attn_block_type == 'bias':
+                self.trans = BiasSoftmaxTrans(in_channels, out_channels, num_heads, dropout=dropout_attn)
+            
+            self.dropout1 = nn.Dropout(dropout_trans)
+
+            self.norm2 = norm(out_channels)
+            self.ff = nn.Sequential(
+                nn.Linear(out_channels, 4*out_channels, bias=True),
+                nn.Dropout(dropout_ff),
+                nn.GELU(),
+                nn.Linear(4*out_channels, out_channels,bias=True),
+                nn.Dropout(dropout_ff)
+            )
+
+        self.local = local
+        if local == 'spline':
+            args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
+            self.conv = MySplineConv(in_channels, out_channels, args)
+        elif local== 'small':
+            self.conv = SmallGraphConv(in_channels, out_channels)
         else:
-            self.proj = nn.Identity()
+            self.conv = None
 
-        self.norm1 = norm(in_channels) 
-
-        if attn_block_type == 'mean':
-            self.trans = TransConvLayer(in_channels, out_channels, num_heads)
-        elif attn_block_type == 'cat' or attn_block_type == 'None':
-            self.trans = TransLayerMultiHead(in_channels, out_channels, num_heads, local=local,
-                                            global_attn= False if attn_block_type=='None' else True,
-                                            alpha=alpha)
-        elif attn_block_type == 'softmax':
-            self.trans = SoftmaxTrans(in_channels, out_channels, num_heads)
-        elif attn_block_type == 'bias':
-            self.trans = BiasSoftmaxTrans(in_channels, out_channels, num_heads, dropout=dropout_attn)
-        
-        self.dropout1 = nn.Dropout(dropout_trans)
-
-        self.norm2 = norm(out_channels)
-        self.ff = nn.Sequential(
-            nn.Linear(out_channels, 4*out_channels, bias=True),
-            nn.Dropout(dropout_ff),
-            nn.GELU(),
-            nn.Linear(4*out_channels, out_channels,bias=True),
-            nn.Dropout(dropout_ff)
-        )
+        if self.global_attn and self.local != 'None':
+            self.alpha = alpha
+        elif self.global_attn:
+            self.alpha = 1
+        else:
+            self.alpha = 0
 
 
     def forward(self, batch: Batch):
 
-        x_c = self.proj(batch.x)
+        if self.conv is not None:
+            out_local = self.conv(batch.clone()).x
+        else:
+            out_local = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
 
-        batch.x = self.norm1(batch.x, batch.batch)
-        batch.x = self.trans(batch)
-        batch.x = self.dropout1(batch.x)
 
-        x = batch.x + x_c
-        
-        x_c = x 
+        if self.global_attn:
+            x_c = self.proj(batch.x)
 
-        x = self.norm2(x, batch.batch)
-        x = self.ff(x)
+            batch.x = self.norm1(batch.x, batch.batch)
+            batch.x = self.trans(batch)
+            batch.x = self.dropout1(batch.x)
 
-        x = x + x_c
+            x = batch.x + x_c
+            
+            x_c = x 
 
-        return x
+            x = self.norm2(x, batch.batch)
+            x = self.ff(x)
+
+            x = x + x_c
+        else:
+            x = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
+
+        final_output = self.alpha*x + (1 - self.alpha)*out_local
+
+        return final_output
     
 
 class BlockDAGT(nn.Module):
