@@ -34,7 +34,8 @@ class SmallGraphConv(nn.Module):
         N = batch.x.shape[0]
         row, column = batch.edge_index
         d = degree(column, N).float()
-        value = torch.sigmoid(self.W_edge(batch.edge_attr)).squeeze(-1)
+        distance = torch.norm(batch.edge_attr, dim=-1)
+        value = torch.sigmoid(self.W_edge(batch.edge_attr)).squeeze(-1) / distance
         value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
         adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
         x = matmul(adj, batch.x) / d.clamp_min(1).unsqueeze(-1)
