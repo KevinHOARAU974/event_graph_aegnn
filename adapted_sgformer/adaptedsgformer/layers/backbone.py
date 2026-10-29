@@ -127,7 +127,7 @@ class BackboneGT(nn.Module):
             for i in range(num_blocks):
 
                 block_gt_params = {"num_heads": num_heads,
-                                    "local" : local_type_list[0],
+                                    "local" : local_type_list[i],
                                     "alpha" : alpha,
                                     "dropout_trans": dropout_trans,
                                     "dropout_ff": dropout_ff,
