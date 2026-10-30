@@ -27,21 +27,34 @@ class SmallGraphConv(nn.Module):
         super(SmallGraphConv,self).__init__()
 
         self.W = nn.Linear(in_channels, out_channels)
-        self.W_edge = nn.Linear(3, 1)
-        nn.init.zeros_(self.W_edge.weight)
+        self.W_edge = nn.Sequential(
+            nn.Linear(3, 16),
+            nn.ReLU(),
+            nn.Linear(16, out_channels)
+        )
+        nn.init.zeros_(self.W_edge[-1].weight)
+        nn.init.zeros_(self.W_edge[-1].bias)
 
     def forward(self, batch):
 
         N = batch.x.shape[0]
         row, column = batch.edge_index
-        d = degree(column, N).float()
-        distance = torch.norm(batch.edge_attr, dim=-1)
-        correction = 1 + self.W_edge(batch.edge_attr).squeeze(-1)
-        value = 1 / distance * correction
-        value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
-        adj = SparseTensor(row=column, col=row, value=value, sparse_sizes=(N,N))
-        x = matmul(adj, batch.x) / d.clamp_min(1).unsqueeze(-1)
 
-        batch.x = self.W(x)
+        d = degree(column, N).float().clamp_min(1)
+
+        distance = torch.norm(batch.edge_attr, dim=-1).clamp_min(1e-6)
+
+        correction = 1 + self.W_edge(batch.edge_attr)
+
+        # print(f'distance: {distance.shape}')
+        # print(f"correction: {correction.shape}")
+        value = correction / distance.unsqueeze(-1)
+
+        x = self.W(batch.x)
+
+        out = torch.zeros_like(x)
+        out.index_add_(0, column, x[row] * value)
+
+        batch.x = out / d.unsqueeze(-1)
 
         return batch
