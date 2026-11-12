@@ -125,6 +125,7 @@ class TransLayerMultiHead(nn.Module):
         assert out_channels % num_heads == 0
         assert global_attn == True or local != 'None'
 
+        self.in_channels = in_channels
         self.out_channels = out_channels
 
         self.global_attn = global_attn
