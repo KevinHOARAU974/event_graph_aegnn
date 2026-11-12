@@ -105,6 +105,7 @@ class BackboneGT(nn.Module):
 
                 block_gt_params={
                                         "num_heads": num_heads,
+                                        "global_attn": False if attn_type_block_list[0]=='None' else True, 
                                         "local" : local_type_list[0],
                                         "alpha" : alpha,
                                         "dropout_trans": dropout_trans,
