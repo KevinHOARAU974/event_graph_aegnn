@@ -145,13 +145,13 @@ class TransLayerMultiHead(nn.Module):
             self.Wo = nn.Linear(out_channels, out_channels)
 
         self.local = local
-        if local == 'spline':
+        if local == 'None':
+            self.conv = None
+        elif local == 'spline':
             args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) 
             self.conv = MySplineConv(in_channels, out_channels, args)
-        elif local== 'small':
-            self.conv = SmallGraphConv(in_channels, out_channels)
         else:
-            self.conv = None
+            self.conv = SmallGraphConv(in_channels, out_channels, type=local)
 
         if self.global_attn and self.local != 'None':
             self.alpha = alpha

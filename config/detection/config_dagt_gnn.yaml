@@ -26,8 +26,8 @@ model_params:
     num_blocks: 4
     first_trans_block: True
     hidden_channels_list: [36, 48, 64, 64, 64]
-    attn_type_block_list: ['cat','cat', 'cat', 'bias', 'bias']
-    local_type_list: ['small', 'small','small', 'None', 'None']
+    attn_type_block_list: ['None','cat', 'cat', 'bias', 'bias']
+    local_type_list: ['gine', 'gine','gine', 'None', 'None']
     alpha: 0.8
     pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'
