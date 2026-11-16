@@ -14,7 +14,7 @@ data_directory: "../data/"
 exp_name: "test"
 
 dataloader:  
-  batch_size : &bs 8
+  batch_size : &bs 4
   num_workers: 8
   pin_memory: True
 
@@ -27,7 +27,7 @@ model_params:
     first_trans_block: True
     hidden_channels_list: [32, 48, 64, 64, 64]
     attn_type_block_list: ['None','cat', 'cat', 'bias', 'bias']
-    local_type_list: ['spline', 'spline','spline', 'None', 'None']  ## nn, eg, trans, gat, gine, spline, None
+    local_type_list: ['gmm', 'gmm','gmm', 'None', 'None']  ## nn, eg, trans, gat, gine, spline, None
     alpha: 0.8
     pooling_type_list: ['voxel_pooling', 'voxel_pooling', 'voxel_pooling', 'voxel_pooling']
     last_voxel_div: '5x7'

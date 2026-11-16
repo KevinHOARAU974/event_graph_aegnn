@@ -5,7 +5,7 @@ from torch_sparse import SparseTensor, matmul
 
 from torch_geometric.data import Data
 from torch_geometric.utils import degree
-from torch_geometric.nn import NNConv, GINEConv, GATv2Conv, TransformerConv, EGConv
+from torch_geometric.nn import NNConv, GINEConv, GATv2Conv, TransformerConv, EGConv, GMMConv
 
 from dagr.model.layers.spline_conv import MySplineConv
 
@@ -39,7 +39,10 @@ class SmallGraphConv(nn.Module):
         elif type=="trans":
             self.conv = TransformerConv(in_channels, out_channels, heads=1, edge_dim=3)
         elif type=="eg":
-            self.conv = EGConv(in_channels, out_channels)
+            self.conv = EGConv(in_channels, out_channels, num_heads=4, num_bases=2, aggregators=["mean", "max"])
+        elif type=="gmm":
+            self.conv = GMMConv(in_channels, out_channels,dim=3, kernel_size=4, separate_gaussians=False, aggr="mean", root_weight=False, bias=True)
+            self.conv.root = None
         else:
             raise Exception(f"{type} invalide")
 
