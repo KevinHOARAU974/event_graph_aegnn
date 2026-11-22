@@ -249,3 +249,25 @@ def convert_to_training_format(bbox, batch, batch_size, bbox_batch=None, sparse=
         targets[batch, counter] = bbox
 
     return targets
+
+
+
+def inspect_edge_distances(batch, name):
+    row, col = batch.edge_index
+    delta = (batch.pos[row] - batch.pos[col]).abs().float()
+
+    print(f"\n{name}")
+
+    for i, axis in enumerate(["x", "y", "t"]):
+        values = delta[:, i]
+
+        median, p90 = torch.quantile(
+            values,
+            torch.tensor([0.5, 0.9], device=values.device)
+        )
+
+        print(
+            f"{axis}: "
+            f"median={median.item():.6f}, "
+            f"p90={p90.item():.6f}"
+        )

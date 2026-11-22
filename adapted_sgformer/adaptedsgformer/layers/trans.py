@@ -211,9 +211,9 @@ class TransLayerMultiHead(nn.Module):
         k1 = ks[:,:,:,:self.head_dim//2]
         k2 = ks[:,:,:,self.head_dim//2:]
 
-        print(f"qs : {qs.shape}")
-        print(f"q1 : {q1.shape}")
-        print(f"q2 : {q2.shape}")
+        # print(f"qs : {qs.shape}")
+        # print(f"q1 : {q1.shape}")
+        # print(f"q2 : {q2.shape}")
         
         # numerator
         kvs1 = torch.einsum("blhm,blhd->bhmd", k1, vs)
@@ -251,8 +251,8 @@ class TransLayerMultiHead(nn.Module):
 
         attn_output2 = attn_output2 * self.lambda_
 
-        print(f"attn_out1:{attn_output1.shape}")
-        print(f"attn_out2:{attn_output2.shape}")
+        # print(f"attn_out1:{attn_output1.shape}")
+        # print(f"attn_out2:{attn_output2.shape}")
         
         attn_output = attn_output1 - attn_output2
 
