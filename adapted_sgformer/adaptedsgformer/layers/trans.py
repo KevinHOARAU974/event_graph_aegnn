@@ -9,6 +9,7 @@ from adaptedsgformer.layers.conv import SmallGraphConv
 
 from dagr.model.layers.spline_conv import MySplineConv
 from argparse import Namespace
+from copy import copy
 
 from torch import Tensor
 
@@ -237,13 +238,13 @@ class TransLayerMultiHead(nn.Module):
         #M : Output size
         
         if self.conv is not None:
-            out_local = self.conv(batch.clone()).x
+            out_local = self.conv(copy(batch)).x
         else:
             out_local = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
 
         if self.global_attn:
         # Groupe by graph in order to have global attention by graph in batch
-            out_global = self.global_attention(batch.clone())
+            out_global = self.global_attention(batch)
         else:
             out_global = torch.zeros((batch.x.shape[0], self.out_channels)).to(batch.x.device)
 

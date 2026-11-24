@@ -70,7 +70,7 @@ class BackboneGT(nn.Module):
 
             self.first_trans_block = first_trans_block
     
-            self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
+            # self.x_embedding = nn.Embedding(embedding_dim=in_channels, num_embeddings=2)
 
             effective_radius = 2*float(int(0.01 * width + 2) / width)
             self.edge_attrs = T.Cartesian(norm=True, cat=False, max_value=effective_radius)
@@ -85,23 +85,23 @@ class BackboneGT(nn.Module):
 
             self.hidden_channels_list = hidden_channels_list
             
-            if self.pe_aggr == 'add':
-                assert in_channels % 3 == 0
-                self.pe_dim = in_channels
-                self.in_proj = in_channels
-                # self.proj = nn.Identity(self.in_proj)
-            elif self.pe_aggr == 'cat':
-                assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
-                self.pe_dim = pe_dim
-                self.in_proj = in_channels + pe_dim
+            # if self.pe_aggr == 'add':
+            #     assert in_channels % 3 == 0
+            #     self.pe_dim = in_channels
+            #     self.in_proj = in_channels
+            #     # self.proj = nn.Identity(self.in_proj)
+            # elif self.pe_aggr == 'cat':
+            #     assert pe_dim % 3 == 0, f"pe_dim ({pe_dim}) must be divisible by 3."
+            #     self.pe_dim = pe_dim
+            #     self.in_proj = in_channels + pe_dim
                 # self.proj = nn.Linear(self.in_proj, in_channels)
 
             if self.first_trans_block:
 
-                if self.pe_aggr == 'add':
-                    self.proj = nn.Identity(self.in_proj)
-                elif self.pe_aggr == 'cat':
-                    self.proj = nn.Linear(self.in_proj, in_channels)
+                # if self.pe_aggr == 'add':
+                #     self.proj = nn.Identity(self.in_proj)
+                # elif self.pe_aggr == 'cat':
+                #     self.proj = nn.Linear(self.in_proj, in_channels)
 
                 block_gt_params={
                                         "num_heads": num_heads,
@@ -127,7 +127,7 @@ class BackboneGT(nn.Module):
             for i in range(num_blocks):
 
                 block_gt_params = {"num_heads": num_heads,
-                                    "local" : local_type_list[0],
+                                    "local" : local_type_list[i],
                                     "alpha" : alpha,
                                     "dropout_trans": dropout_trans,
                                     "dropout_ff": dropout_ff,
@@ -167,7 +167,7 @@ class BackboneGT(nn.Module):
 
                 self.block_dagt.append(BlockDectectGT(hidden_channels_list[i],
                                                 hidden_channels_list[i+1],
-                                                pe_dim=self.pe_dim,
+                                                pe_dim=pe_dim,
                                                 pe_aggr=pe_aggr,
                                                 encoding_periods=encoding_periods,
                                                 factors= factors,
@@ -179,33 +179,33 @@ class BackboneGT(nn.Module):
         
     def forward(self, batch :Batch):
         
-        device = next(self.parameters()).device
-        data = batch.clone().to(device)
+        # device = next(self.parameters()).device
+        # data = batch.clone().to(device)
 
         # check_graphs(batch, "DataLoader")
 
-        data = self.events_to_graph(data)
+        data = self.events_to_graph(batch)
 
         # check_graphs(data, "Après ev_to_gr")
         data = self.edge_attrs(data)
         #Embedding
 
-        embed_pos = torch.stack([
-            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
-        ], dim=1)
+        # embed_pos = torch.stack([
+        #     embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+        # ], dim=1)
 
-        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+        # embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
-        x_emb = self.x_embedding(data.x.long()).squeeze(1)
+        # x_emb = self.x_embedding(data.x.long()).squeeze(1)
 
-        if self.pe_aggr == 'add':
-            data.x = x_emb + embed_pos
-        elif self.pe_aggr == 'cat':
-            data.x = torch.cat((x_emb,embed_pos), dim=1)
+        # if self.pe_aggr == 'add':
+        #     data.x = x_emb + embed_pos
+        # elif self.pe_aggr == 'cat':
+        #     data.x = torch.cat((x_emb,embed_pos), dim=1)
 
-        # check_graphs(data, "BACKBONE INPUT")
+        # # check_graphs(data, "BACKBONE INPUT")
 
-        data.x = self.proj(data.x)
+        # data.x = self.proj(data.x)
 
         if self.first_trans_block:
             data.x = self.blockGT0(data)
