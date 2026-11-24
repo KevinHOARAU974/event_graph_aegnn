@@ -12,6 +12,7 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.nn.pool.avg_pool import _avg_pool_x
 from torch_geometric.nn.pool.pool import pool_pos
 from torch_geometric.utils import subgraph
+from torch_geometric.utils import coalesce 
 
 from dagr.model.layers.components import BatchNormData
 
@@ -217,12 +218,10 @@ class Pooling2(nn.Module):
 
         unique_clusters, cluster, perm, _ = consecutive_cluster(cluster)
         edge_index = cluster[data.edge_index]
-        if self.self_loop:
-            edge_index = edge_index.unique(dim=-1)
-        else:
-            edge_index = edge_index[:, edge_index[0]!=edge_index[1]]
-            if edge_index.shape[1] > 0:
-                edge_index = edge_index.unique(dim=-1)
+        if not self.self_loop:
+            edge_index = edge_index[:, edge_index[0] != edge_index[1]]
+
+        edge_index = coalesce(edge_index, num_nodes=unique_clusters.numel())
 
         batch = None if data.batch is None else data.batch[perm]
         pos = None if data.pos is None else pool_pos(cluster, data.pos)

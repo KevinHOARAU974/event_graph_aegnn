@@ -123,7 +123,7 @@ class TransLayerMultiHead(nn.Module):
                  use_weight=True):
         super().__init__()
 
-        assert out_channels % 2*num_heads == 0
+        assert out_channels % (2*num_heads) == 0
         assert global_attn == True or local != 'None'
 
         self.in_channels = in_channels
@@ -189,10 +189,11 @@ class TransLayerMultiHead(nn.Module):
         else:
             vs = x.reshape(batch_size, -1, 1, self.out_channels)
 
-        #Set to zeros padding elements in order that they not contribute to attention
-        qs[~mask_dense] = 0.0 
-        ks[~mask_dense] = 0.0
-        vs[~mask_dense] = 0.0
+        # Broadcast the padding mask across heads and channels.
+        padding = ~mask_dense[:, :, None, None]
+        qs = qs.masked_fill(padding, 0.0)
+        ks = ks.masked_fill(padding, 0.0)
+        vs = vs.masked_fill(padding, 0.0)
 
         # normalize input
         # qs = qs / torch.norm(qs, p=2)  # [B, Nmax, H, M/H]
@@ -215,46 +216,30 @@ class TransLayerMultiHead(nn.Module):
         # print(f"q1 : {q1.shape}")
         # print(f"q2 : {q2.shape}")
         
-        # numerator
+        # attn 1
         kvs1 = torch.einsum("blhm,blhd->bhmd", k1, vs)
         attention_num1 = torch.einsum("bnhm,bhmd->bnhd", q1, kvs1)  # [B, Nmax, H, D]
-        attention_num1 += N.view(batch_size, 1, 1, 1) * vs
 
-        # denominator
-        # all_ones = torch.ones([ks.shape[1]]).to(ks.device)
-        # ks_sum = torch.einsum("blhm,l->bhm", ks, all_ones)
-        k1_sum = k1.sum(dim=1)
-        attention_normalizer1 = torch.einsum("bnhm,bhm->bnh", q1, k1_sum)  # [B, Nmax, H]
 
-        # attentive aggregated results
-        attention_normalizer1 = torch.unsqueeze(attention_normalizer1, len(attention_normalizer1.shape))  # [B, Nmax, H, 1]
-        attention_normalizer1 = attention_normalizer1 + N.view(batch_size, 1, 1, 1)
-        # attention_normalizer += torch.ones_like(attention_normalizer) * N.view(batch_size, 1, 1, 1)
-        attn_output1 = attention_num1 / attention_normalizer1  # [B,Nmax, H, D]
-
-        # numerator
+        #attn 2
         kvs2 = torch.einsum("blhm,blhd->bhmd", k2, vs)
         attention_num2 = torch.einsum("bnhm,bhmd->bnhd", q2, kvs2)  # [B, Nmax, H, D]
-        attention_num2 += N.view(batch_size, 1, 1, 1) * vs
+        attention_num2 = attention_num2 * self.lambda_
+
+        # Numerator
+        attention_num = attention_num1 - attention_num2
+        attention_num = attention_num + N.view(batch_size, 1, 1, 1) * vs
 
         # denominator
-        # all_ones = torch.ones([ks.shape[1]]).to(ks.device)
-        # ks_sum = torch.einsum("blhm,l->bhm", ks, all_ones)
+        k1_sum = k1.sum(dim=1)
+        attention_normalizer1 = torch.einsum("bnhm,bhm->bnh", q1, k1_sum)  # [B, Nmax, H]
         k2_sum = k2.sum(dim=1)
         attention_normalizer2 = torch.einsum("bnhm,bhm->bnh", q2, k2_sum)  # [B, Nmax, H]
+        attention_normalizer2 = attention_normalizer2 * self.lambda_.sum()
 
-        # attentive aggregated results
-        attention_normalizer2 = torch.unsqueeze(attention_normalizer2, len(attention_normalizer2.shape))  # [B, Nmax, H, 1]
-        attention_normalizer2 = attention_normalizer2 + N.view(batch_size, 1, 1, 1)
-        # attention_normalizer += torch.ones_like(attention_normalizer) * N.view(batch_size, 1, 1, 1)
-        attn_output2 = attention_num2 / attention_normalizer2  # [B,Nmax, H, D]
-
-        attn_output2 = attn_output2 * self.lambda_
-
-        # print(f"attn_out1:{attn_output1.shape}")
-        # print(f"attn_out2:{attn_output2.shape}")
+        attention_normalizer = N.view(batch_size, 1, 1) + attention_normalizer1 - attention_normalizer2
         
-        attn_output = attn_output1 - attn_output2
+        attn_output = attention_num / attention_normalizer.unsqueeze(-1)
 
         # compute attention for visualization if needed
         # if output_attn:
@@ -264,9 +249,10 @@ class TransLayerMultiHead(nn.Module):
 
         attn_output *= (1-self.lambda_init)
         
-        attn_output = attn_output[mask_dense]
-
-        attn_output = attn_output.reshape(attn_output.size(0), self.out_channels)
+        # Save integer indices so backward can scatter gradients without
+        # recomputing nonzero on the dense boolean mask.
+        node_indices = mask_dense.flatten().nonzero(as_tuple=True)[0]
+        attn_output = attn_output.reshape(-1, self.out_channels).index_select(0, node_indices)
         proj_output = self.Wo(attn_output)
 
         return proj_output
