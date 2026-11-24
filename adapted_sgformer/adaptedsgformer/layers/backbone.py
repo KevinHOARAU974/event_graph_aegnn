@@ -53,6 +53,7 @@ class BackboneGT(nn.Module):
             else:
                 assert len(attn_type_block_list) == num_blocks, f'Length of attn_type_block must be num_blocks'
             assert len(pooling_type_list) == num_blocks, f'Length of pooling_type_list must be num_blocks'
+            assert in_channels != 1
     
             self.num_scales = num_scales
     
