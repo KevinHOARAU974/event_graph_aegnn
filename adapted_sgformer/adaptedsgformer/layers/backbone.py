@@ -13,6 +13,11 @@ from adaptedsgformer.layers.ev_to_gr import EV_TGN
 
 from adaptedsgformer.utils import embed_1D_scalar,check_graphs
 
+from dagr.model.layers.spline_conv import MySplineConv
+from dagr.model.layers.conv import Layer
+
+from argparse import Namespace
+
 class BackboneGT(nn.Module):
 
     def __init__(self, 
@@ -84,6 +89,8 @@ class BackboneGT(nn.Module):
             self.events_to_graph = EV_TGN(**args_gr)
 
             self.hidden_channels_list = hidden_channels_list
+
+            self.pe_dim = pe_dim
             
             # if self.pe_aggr == 'add':
             #     assert in_channels % 3 == 0
@@ -103,17 +110,19 @@ class BackboneGT(nn.Module):
                 # elif self.pe_aggr == 'cat':
                 #     self.proj = nn.Linear(self.in_proj, in_channels)
 
-                block_gt_params={
-                                        "num_heads": num_heads,
-                                        "local" : local_type_list[0],
-                                        "alpha" : alpha,
-                                        "dropout_trans": dropout_trans,
-                                        "dropout_ff": dropout_ff,
-                                        "norm_func": norm_func,
-                                        "attn_block_type": attn_type_block_list[0],
-                                    }
+                # block_gt_params={
+                #                         "num_heads": num_heads,
+                #                         "local" : local_type_list[0],
+                #                         "alpha" : alpha,
+                #                         "dropout_trans": dropout_trans,
+                #                         "dropout_ff": dropout_ff,
+                #                         "norm_func": norm_func,
+                #                         "attn_block_type": attn_type_block_list[0],
+                #                     }
 
-                self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **block_gt_params)
+                # self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **block_gt_params)
+                args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5, activation='relu') 
+                self.conv = Layer(in_channels+pe_dim, hidden_channels_list[0], args=args)
                 
                 attn_type_block_list = attn_type_block_list[1:]
                 local_type_list = local_type_list[1:]
@@ -190,11 +199,11 @@ class BackboneGT(nn.Module):
         data = self.edge_attrs(data)
         #Embedding
 
-        # embed_pos = torch.stack([
-        #     embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
-        # ], dim=1)
+        embed_pos = torch.stack([
+            embed_1D_scalar(data.pos[:, dim_in] * fact, self.pe_dim//3 ,max_period=max_period) for (dim_in, fact, max_period) in zip(range(3), self.factors, self.encoding_periods)
+        ], dim=1)
 
-        # embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
+        embed_pos = embed_pos.reshape(embed_pos.shape[0], -1)
 
         # x_emb = self.x_embedding(data.x.long()).squeeze(1)
 
@@ -207,8 +216,11 @@ class BackboneGT(nn.Module):
 
         # data.x = self.proj(data.x)
 
+        data.x = torch.cat((data.x ,embed_pos), dim=1)
+
         if self.first_trans_block:
-            data.x = self.blockGT0(data)
+            # data.x = self.blockGT0(data)
+            data = self.conv(data)
 
         # check_graphs(data, "AFTER BLOCK 0")
 
