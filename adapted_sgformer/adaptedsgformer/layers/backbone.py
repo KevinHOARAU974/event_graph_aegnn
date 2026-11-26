@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch_geometric.transforms as T
 
 from torch_geometric.data import Batch
+from torch_geometric.nn import BatchNorm
 
 # from dagr.model.networks.net import compute_pooling_at_each_layer
 from adaptedsgformer.utils import compute_pooling_at_each_layer
@@ -17,6 +18,7 @@ from dagr.model.layers.spline_conv import MySplineConv
 from dagr.model.layers.conv import Layer
 
 from argparse import Namespace
+from copy import copy
 
 class BackboneGT(nn.Module):
 
@@ -121,8 +123,18 @@ class BackboneGT(nn.Module):
                 #                     }
 
                 # self.blockGT0 = BlockGT(in_channels, hidden_channels_list[0], **block_gt_params)
-                args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5, activation='relu') 
-                self.conv = Layer(in_channels+pe_dim, hidden_channels_list[0], args=args)
+                args = Namespace(edge_attr_dim = 2, aggr = "sum", kernel_size=5) #, activation='relu')
+
+                self.skip = nn.Sequential(
+                    nn.Linear(in_channels+pe_dim, hidden_channels_list[0]),
+                    nn.BatchNorm1d(hidden_channels_list[0])
+                )
+                self.conv = MySplineConv(in_channels+pe_dim, hidden_channels_list[0], args=args)
+                self.norm = BatchNorm(in_channels=hidden_channels_list[0])
+                self.activation = nn.ReLU()
+
+
+                # self.conv = Layer(in_channels+pe_dim, hidden_channels_list[0], args=args)
                 
                 attn_type_block_list = attn_type_block_list[1:]
                 local_type_list = local_type_list[1:]
@@ -220,7 +232,11 @@ class BackboneGT(nn.Module):
 
         if self.first_trans_block:
             # data.x = self.blockGT0(data)
-            data = self.conv(data)
+            data_skip = self.skip(data.x)
+            data_res = self.conv(copy(data)).x
+            data_res = self.norm(data_res)
+            data.x = self.activation(data_res+data_skip)
+
 
         # check_graphs(data, "AFTER BLOCK 0")
 
