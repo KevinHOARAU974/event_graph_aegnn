@@ -1,0 +1,26 @@
+run_name: runtime_comparison
+
+models:
+  - name: DAGR-N
+    type: dagr
+    path: ../cluster_checkpoint/logs/ncaltech101/detection/v6c1mle6/best_model_mAP_0.3932487436288132.pth
+
+  - name: DAGT
+    type: dagt
+    path: ../cluster_checkpoint/logs_dagt/ncaltech101/detection/ejmdoiwc/best_model_mAP_0.4462856590138253.pth
+
+  # - name: DAGT-small
+  #   type: dagt
+  #   path: ../cluster_checkpoint/...
+
+data_directory: ../data
+dataset: ncaltech101
+
+nb_runs: 5
+warmup: 20
+seed: 12345
+
+dataloader:
+  batch_size: 1
+  num_workers: 8
+  pin_memory: True
