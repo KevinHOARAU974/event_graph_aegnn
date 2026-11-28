@@ -129,6 +129,8 @@ class BackboneGT(nn.Module):
                     nn.Linear(in_channels+pe_dim, hidden_channels_list[0]),
                     nn.BatchNorm1d(hidden_channels_list[0])
                 )
+
+                self.dropout = nn.Dropout(p=0.1)
                 self.conv = MySplineConv(in_channels+pe_dim, hidden_channels_list[0], args=args)
                 self.norm = BatchNorm(in_channels=hidden_channels_list[0])
                 self.activation = nn.ReLU()
@@ -235,6 +237,7 @@ class BackboneGT(nn.Module):
             data_skip = self.skip(data.x)
             data_res = self.conv(copy(data)).x
             data_res = self.norm(data_res)
+            data_res = self.dropout(data_res)
             data.x = self.activation(data_res+data_skip)
 
 
